@@ -14,6 +14,7 @@ export interface WordBank {
   name: string;
   emoji: string;
   chars: string[];
+  useHelpers?: boolean; // 默认 true，家长页可关闭
 }
 
 /** 权重持久化结构 */
@@ -60,4 +61,5 @@ export interface ParentConfig {
   password: string;
   enabledBanks: string[];
   customBanks: WordBank[];
+  bankHelpers?: Record<string, boolean>; // bankId → useHelpers(true/false)
 }

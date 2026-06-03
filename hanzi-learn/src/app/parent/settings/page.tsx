@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { BUILT_IN_BANKS } from '@/lib/wordBanks';
+import { BUILT_IN_BANKS, getEffectiveUseHelpers } from '@/lib/wordBanks';
 import { loadConfig, saveConfig, saveWeightData, loadWeightData, saveStats } from '@/lib/storage';
 import type { ParentConfig, WordBank } from '@/lib/types';
 
@@ -39,6 +39,15 @@ export default function SettingsPage() {
     } else {
       config.enabledBanks.push(id);
     }
+    saveConfig(config);
+    refresh();
+  };
+
+  // 切换助字
+  const toggleHelpers = (id: string) => {
+    if (!config.bankHelpers) config.bankHelpers = {};
+    const current = config.bankHelpers[id] !== false; // 默认 true
+    config.bankHelpers[id] = !current;
     saveConfig(config);
     refresh();
   };
@@ -175,7 +184,9 @@ export default function SettingsPage() {
                 key={bank.id}
                 bank={bank}
                 enabled={true}
+                useHelpers={getEffectiveUseHelpers(bank, config.bankHelpers)}
                 onToggle={() => toggleBank(bank.id)}
+                onToggleHelpers={() => toggleHelpers(bank.id)}
               />
             )
           )}
@@ -186,7 +197,9 @@ export default function SettingsPage() {
                 key={bank.id}
                 bank={bank}
                 enabled={true}
+                useHelpers={getEffectiveUseHelpers(bank, config.bankHelpers)}
                 onToggle={() => toggleBank(bank.id)}
+                onToggleHelpers={() => toggleHelpers(bank.id)}
                 onEdit={() => openEditor(bank)}
                 onDelete={() => deleteCustom(bank.id)}
               />
@@ -209,7 +222,9 @@ export default function SettingsPage() {
                 key={bank.id}
                 bank={bank}
                 enabled={false}
+                useHelpers={getEffectiveUseHelpers(bank, config.bankHelpers)}
                 onToggle={() => toggleBank(bank.id)}
+                onToggleHelpers={() => toggleHelpers(bank.id)}
               />
             ))}
           </div>
@@ -243,7 +258,9 @@ export default function SettingsPage() {
                 key={bank.id}
                 bank={bank}
                 enabled={allEnabled || config.enabledBanks.includes(bank.id)}
+                useHelpers={getEffectiveUseHelpers(bank, config.bankHelpers)}
                 onToggle={() => toggleBank(bank.id)}
+                onToggleHelpers={() => toggleHelpers(bank.id)}
                 onEdit={() => openEditor(bank)}
                 onDelete={() => deleteCustom(bank.id)}
               />
@@ -408,13 +425,17 @@ export default function SettingsPage() {
 function BankToggleCard({
   bank,
   enabled,
+  useHelpers,
   onToggle,
+  onToggleHelpers,
   onEdit,
   onDelete,
 }: {
   bank: WordBank;
   enabled: boolean;
+  useHelpers: boolean;
   onToggle: () => void;
+  onToggleHelpers: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
@@ -435,6 +456,20 @@ function BankToggleCard({
           {enabled ? '✅ 已启用' : '❌ 已禁用'}
         </div>
       </button>
+
+      {/* 助字开关 */}
+      <div className="mt-2 flex items-center justify-center gap-1 text-xs">
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleHelpers(); }}
+          className={`px-2 py-0.5 rounded-full transition-colors ${
+            useHelpers
+              ? 'bg-candy-sky/20 text-candy-teal'
+              : 'bg-gray-100 text-gray-400'
+          }`}
+        >
+          {useHelpers ? '📖 助字开' : '📕 助字关'}
+        </button>
+      </div>
 
       {/* 编辑/删除按钮（仅自定义字库） */}
       {onEdit && onDelete && (

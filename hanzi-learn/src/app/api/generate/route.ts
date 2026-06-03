@@ -1,36 +1,52 @@
 import { NextResponse } from 'next/server';
 import { findExtraChars, findUsedChars, hasSensitiveContent } from '@/lib/validator';
 import { getFallbackSentence, pickFallbackUsedChars } from '@/lib/fallbackSentences';
+import { findBankById, getFullBankChars } from '@/lib/wordBanks';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 const MAX_RETRIES = 3;
-const MIN_USED_CHARS = 2;
+const MIN_USED_CHARS = 1;
+const MIN_SCORE = 5; // 自评分数低于此值则重试
+
+/** 带时间戳的日志 */
+function log(...args: unknown[]) {
+  const time = new Date().toISOString().slice(11, 23);
+  console.log(`[${time}] [generate]`, ...args);
+}
 
 function buildPrompt(sortedChars: string): string {
-  return `你是一位有10年经验的儿童语文老师，专为6-9岁小朋友编写句子。
+  return `你是一位儿童语文老师，正在教小朋友认字。
 
-## 核心规则（必须严格遵守）
-1. 你只能使用下方提供的汉字来造句，不可以添加任何其他汉字
-2. 必须优先使用序列中靠前的汉字
-3. 句子长度：每句不超过15个字，总共1-2句
-4. 内容：积极向上、充满童趣和想象力
+最重要：只从下面提供的字里选，不能加别的字。
 
-## 严禁内容
-暴力、负面情绪、辱骂、歧视、恐怖、性暗示、死亡相关内容
+其他要求：
+- 只输出一个结果，不要多个
+- 输出格式：结果【通顺度-口语化】
+  例如：小猫【9-8】  或  日月星辰【8-7】
+- 通顺度评分（1-10）：读起来顺不顺
+- 口语化评分（1-10）：像不像平时说话
+- 尽量用排在前面的字
+- 不要标点符号
+- 内容积极、有童趣
+- 禁止：暴力、负面、辱骂、死亡
 
-## 输出格式
-只返回生成的句子，不要任何额外说明
+可用字：${sortedChars}
 
-## 可以使用的汉字（仅限这些）
-${sortedChars}`;
+先输出结果，再输出评分，不要其他内容。`;
 }
 
 export async function POST(req: Request) {
+  const requestId = Math.random().toString(36).slice(2, 8);
+  log(`[${requestId}] ====== 开始生成句子 ======`);
+
   try {
     const body = await req.json();
     const { bankId, sortedChars } = body as { bankId: string; sortedChars: string };
 
+    log(`[${requestId}] 请求参数:`, { bankId, sortedCharsLen: sortedChars?.length });
+
     if (!bankId || !sortedChars) {
+      log(`[${requestId}] ❌ 缺少必要参数: bankId=${bankId}, sortedChars=${sortedChars}`);
       return NextResponse.json(
         { error: 'invalid_request', message: '缺少必要参数' },
         { status: 400 }
@@ -41,10 +57,19 @@ export async function POST(req: Request) {
     const allowedSet = new Set<string>(sortedCharsStr.split(''));
     const apiKey = process.env.DEEPSEEK_API_KEY;
 
+    // 检查 API Key
+    log(`[${requestId}] API Key 状态:`, {
+      exists: !!apiKey,
+      length: apiKey?.length,
+      preview: apiKey ? apiKey.slice(0, 8) + '...' : '(none)',
+      envKeys: Object.keys(process.env).filter(k => k.includes('DEEP') || k.includes('API')),
+    });
+
     if (!apiKey || apiKey === 'your_deepseek_api_key_here') {
-      // 无 API Key 时直接返回保底句
+      log(`[${requestId}] ⚠️ 无有效 API Key，使用保底句`);
       const text = getFallbackSentence(bankId);
       const usedChars = pickFallbackUsedChars(text, allowedSet);
+      log(`[${requestId}] ✅ 保底句: "${text}", 用字:`, usedChars);
       return NextResponse.json({
         text,
         usedChars,
@@ -53,69 +78,158 @@ export async function POST(req: Request) {
       });
     }
 
-    // 最多重试 MAX_RETRIES 次
+    // 构造请求体
+    const prompt = buildPrompt(sortedCharsStr);
+    const userMsg = `从这些字里选，输出一个结果：${sortedCharsStr}`;
+    const messages: { role: string; content: string }[] = [
+      { role: 'system', content: prompt },
+      { role: 'user', content: userMsg },
+    ];
+
+    log(`[${requestId}] ====== DeepSeek 完整 Prompt ======`);
+    log(`[${requestId}] [SYSTEM]\n${prompt}`);
+    log(`[${requestId}] [USER] ${userMsg}`);
+    log(`[${requestId}] ====== Prompt 结束 ======`);
+
+    // 最多重试 MAX_RETRIES 次，每次失败将原因回传给模型
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      log(`[${requestId}] ====== 尝试 ${attempt + 1}/${MAX_RETRIES} ======`);
+
+      const requestBody = {
+        model: 'deepseek-chat',
+        messages,
+        temperature: 0.5,
+        max_tokens: 300,
+      };
+
       try {
+        const startTime = Date.now();
+
         const response = await fetch(DEEPSEEK_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-              { role: 'system', content: buildPrompt(sortedCharsStr) },
-              {
-                role: 'user',
-                content: `请只使用这些汉字造句：${sortedCharsStr}`,
-              },
-            ],
-            temperature: 0.7,
-            max_tokens: 100,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
-        if (!response.ok) continue;
+        const elapsed = Date.now() - startTime;
+        log(`[${requestId}] DeepSeek 响应状态: ${response.status} (${elapsed}ms)`);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          log(`[${requestId}] ❌ DeepSeek HTTP 错误: ${response.status}, body: ${errorText}`);
+          continue;
+        }
 
         const data = await response.json();
         const text: string = (data.choices?.[0]?.message?.content || '').trim();
+        log(`[${requestId}] DeepSeek → "${text}"`);
 
-        if (!text) continue;
+        if (!text) {
+          log(`[${requestId}] ❌ 空文本，完整响应:`, JSON.stringify(data).slice(0, 600));
+          // 回传：告诉模型不能返回空
+          messages.push(
+            { role: 'assistant', content: '' },
+            { role: 'user', content: '不能输出空内容，请直接从可用字里选字输出' }
+          );
+          continue;
+        }
 
         // 检查1：敏感词
-        if (hasSensitiveContent(text)) continue;
+        const hasSensitive = hasSensitiveContent(text);
+        log(`[${requestId}] 检查1 - 敏感词: ${hasSensitive ? '❌ 命中' : '✅ 通过'}`);
+        if (hasSensitive) {
+          // 回传：告诉模型输出包含敏感内容
+          messages.push(
+            { role: 'assistant', content: text },
+            { role: 'user', content: '输出中包含不适合儿童的内容，请重新输出一个积极健康的' }
+          );
+          continue;
+        }
 
         // 检查2：越界字
         const extraChars = findExtraChars(text, allowedSet);
-        if (extraChars.length > 0) continue;
+        log(`[${requestId}] 检查2 - 越界字: ${extraChars.length > 0 ? `❌ 发现 ${extraChars}: ${JSON.stringify(extraChars)}` : '✅ 通过'}`);
+        if (extraChars.length > 0) {
+          // 回传：列出哪些字越界了
+          messages.push(
+            { role: 'assistant', content: text },
+            { role: 'user', content: `"${extraChars.join('')}" 这些字不可以使用，只能从给定的字里选` }
+          );
+          continue;
+        }
 
         // 检查3：最少使用字数量
         const usedChars = findUsedChars(text, allowedSet);
-        if (usedChars.length < MIN_USED_CHARS) continue;
+        log(`[${requestId}] 检查3 - 最少字数: ${usedChars.length < MIN_USED_CHARS ? `❌ 只用 ${usedChars.length} 个字` : `✅ 通过 (${usedChars.length}个)`}`);
+        if (usedChars.length < MIN_USED_CHARS) {
+          // 回传：至少用 MIN_USED_CHARS 个字
+          messages.push(
+            { role: 'assistant', content: text },
+            { role: 'user', content: `至少使用 ${MIN_USED_CHARS} 个字，请重新输出` }
+          );
+          continue;
+        }
 
-        // 全部通过
-        return NextResponse.json({
-          text,
-          usedChars,
-          extraChars: [],
-          isFallback: false,
-        });
-      } catch {
+        // 检查4：提取评分并校验
+        const scoreMatch = text.match(/【(\d+)-(\d+)】$/);
+        let fluencyScore = -1;
+        let spokenScore = -1;
+        if (scoreMatch) {
+          fluencyScore = parseInt(scoreMatch[1], 10);
+          spokenScore = parseInt(scoreMatch[2], 10);
+        }
+        const avgScore = fluencyScore >= 1 && spokenScore >= 1
+          ? Math.round((fluencyScore + spokenScore) / 2)
+          : -1;
+        log(`[${requestId}] 检查4 - 自评: 通顺${fluencyScore} 口语${spokenScore} 平均${avgScore} ${avgScore >= MIN_SCORE ? `✅` : `❌ < ${MIN_SCORE}`}`);
+
+        if (avgScore >= MIN_SCORE) {
+          // 移除评分后缀，只返回纯文本
+          const cleanText = text.replace(/【\d+-\d+】$/, '').trim();
+          log(`[${requestId}] ✅✅✅ 全部检查通过！返回句子: "${cleanText}"`);
+          log(`[${requestId}] 使用汉字:`, usedChars);
+          return NextResponse.json({
+            text: cleanText,
+            usedChars,
+            extraChars: [],
+            isFallback: false,
+          });
+        } else {
+          // 评分过低或格式不对，回传要求改进
+          const reason = avgScore < 0
+            ? '输出格式不对，请在结果后面加上【通顺度-口语化】评分，例如：小猫【9-8】'
+            : `通顺度或口语化评分偏低（${avgScore}分），请输出更自然通顺的内容`;
+          messages.push(
+            { role: 'assistant', content: text },
+            { role: 'user', content: reason }
+          );
+          continue;
+        }
+      } catch (err) {
+        log(`[${requestId}] ❌ 请求异常:`, err instanceof Error ? err.message : err);
         continue;
       }
     }
 
     // 全部重试失败，降级到保底句
-    const text = getFallbackSentence(bankId);
-    const usedChars = pickFallbackUsedChars(text, allowedSet);
+    log(`[${requestId}] ⚠️ ${MAX_RETRIES} 次重试均失败，降级到保底句`);
+    const fallbackText = getFallbackSentence(bankId);
+    const fallbackUsedChars = pickFallbackUsedChars(fallbackText, allowedSet);
+    log(`[${requestId}] ✅ 保底句: "${fallbackText}", 用字:`, fallbackUsedChars);
     return NextResponse.json({
-      text,
-      usedChars,
+      text: fallbackText,
+      usedChars: fallbackUsedChars,
       extraChars: [],
       isFallback: true,
     });
-  } catch {
+  } catch (err) {
+    log(`[${requestId}] 💥 未捕获异常:`, err instanceof Error ? err.message : err);
+    if (err instanceof Error && err.stack) {
+      log(`[${requestId}] Stack:`, err.stack.split('\n').slice(0, 5).join('\n'));
+    }
     return NextResponse.json(
       { error: 'server_error', message: '服务器内部错误' },
       { status: 500 }
