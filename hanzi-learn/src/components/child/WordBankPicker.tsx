@@ -96,7 +96,7 @@ export default function WordBankPicker() {
             whileHover={{ scale: 1.03 }}
             onClick={() => handleSelect(bank.id)}
             className={`
-              aspect-square rounded-3xl 
+              aspect-square rounded-3xl relative
               bg-gradient-to-br ${CARD_COLORS[i % CARD_COLORS.length]}
               shadow-lg flex flex-col items-center justify-center gap-2
               active:shadow-md transition-shadow
@@ -111,6 +111,20 @@ export default function WordBankPicker() {
             <span className="text-lg font-cartoon text-gray-700">
               {bank.name}
             </span>
+            {bank.chars.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/print?bank=${bank.id}`);
+                }}
+                className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-white/70
+                           flex items-center justify-center text-xs shadow-sm
+                           active:scale-90 transition-transform"
+                title="打印字卡"
+              >
+                🖨️
+              </button>
+            )}
           </motion.button>
         ))}
       </div>
