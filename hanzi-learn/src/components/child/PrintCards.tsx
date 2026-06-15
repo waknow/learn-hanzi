@@ -89,7 +89,7 @@ export default function PrintCards({ chars }: PrintCardsProps) {
           <select value={config.font}
             onChange={e => setConfig({ font: e.target.value as PrintFont })}
             className="px-2 py-1 rounded bg-gray-50 border-0 text-gray-600">
-            {FONT_OPTIONS.map(o => <option key={o.value}>{o.label}</option>)}
+            {FONT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
 
           <div className="flex rounded bg-gray-50 overflow-hidden">
