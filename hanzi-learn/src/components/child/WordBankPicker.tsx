@@ -76,6 +76,14 @@ export default function WordBankPicker() {
 
   return (
     <div className="min-h-screen p-6 flex flex-col">
+      {/* 返回首页 */}
+      <button
+        onClick={() => router.push('/')}
+        className="self-start w-10 h-10 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-lg active:scale-90 transition-transform"
+        aria-label="返回首页"
+      >
+        ←
+      </button>
       <h1 className="text-3xl font-cartoon text-center text-gray-700 mt-4 mb-8">
         ✨ 选一个字库吧 ✨
       </h1>

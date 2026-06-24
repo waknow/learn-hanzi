@@ -29,6 +29,7 @@ export interface WeightData {
 export interface GenerateRequest {
   bankId: string;
   sortedChars: string;
+  charWeights?: string; // "字(权重)" 格式的字符串，如 "日(5) 月(3) 星(2)"
 }
 
 /** API 响应体 */

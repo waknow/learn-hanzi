@@ -14,7 +14,11 @@ function log(...args: unknown[]) {
   console.log(`[${time}] [generate]`, ...args);
 }
 
-function buildPrompt(sortedChars: string): string {
+function buildPrompt(sortedChars: string, charWeights?: string): string {
+  const weightSection = charWeights
+    ? `\n各字权重（越高越优先使用）：${charWeights}`
+    : '';
+
   return `你是一位儿童语文老师，正在教小朋友认字。
 
 最重要：只从下面提供的字里选，不能加别的字。
@@ -25,7 +29,7 @@ function buildPrompt(sortedChars: string): string {
   例如：小猫【9-8】  或  日月星辰【8-7】
 - 通顺度评分（1-10）：读起来顺不顺
 - 口语化评分（1-10）：像不像平时说话
-- 尽量用排在前面的字
+- 尽量用排在前面的字${weightSection}
 - 不要标点符号
 - 内容积极、有童趣
 - 禁止：暴力、负面、辱骂、死亡
@@ -41,9 +45,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { bankId, sortedChars } = body as { bankId: string; sortedChars: string };
+    const { bankId, sortedChars, charWeights } = body as {
+      bankId: string; sortedChars: string; charWeights?: string;
+    };
 
-    log(`[${requestId}] 请求参数:`, { bankId, sortedCharsLen: sortedChars?.length });
+    log(`[${requestId}] 请求参数:`, { bankId, sortedCharsLen: sortedChars?.length, hasWeights: !!charWeights });
 
     if (!bankId || !sortedChars) {
       log(`[${requestId}] ❌ 缺少必要参数: bankId=${bankId}, sortedChars=${sortedChars}`);
@@ -79,7 +85,7 @@ export async function POST(req: Request) {
     }
 
     // 构造请求体
-    const prompt = buildPrompt(sortedCharsStr);
+    const prompt = buildPrompt(sortedCharsStr, charWeights);
     const userMsg = `从这些字里选，输出一个结果：${sortedCharsStr}`;
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: prompt },
@@ -87,6 +93,7 @@ export async function POST(req: Request) {
     ];
 
     log(`[${requestId}] ====== DeepSeek 完整 Prompt ======`);
+    if (charWeights) log(`[${requestId}] [权重] ${charWeights}`);
     log(`[${requestId}] [SYSTEM]\n${prompt}`);
     log(`[${requestId}] [USER] ${userMsg}`);
     log(`[${requestId}] ====== Prompt 结束 ======`);

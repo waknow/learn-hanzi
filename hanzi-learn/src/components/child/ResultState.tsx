@@ -36,11 +36,11 @@ export default function ResultState({
   // 拆成字符用于逐字动画
   const chars = text.split('');
 
-  // 分行（每行最多 8 个汉字 + 标点）
+  // 分行（每行最多 12 个汉字 + 标点）
   const lines: string[] = [];
   let currentLine = '';
   for (const char of chars) {
-    if (currentLine.length >= 8 && /[\u4e00-\u9fff]/.test(char)) {
+    if (currentLine.length >= 12 && /[\u4e00-\u9fff]/.test(char)) {
       lines.push(currentLine);
       currentLine = char;
     } else {
@@ -55,14 +55,14 @@ export default function ResultState({
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
       {/* 句子展示 */}
       <motion.div
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="bg-white/80 backdrop-blur-sm rounded-4xl shadow-lg px-10 py-8 
-                   max-w-lg w-full cursor-pointer"
+        className="bg-white/80 backdrop-blur-sm rounded-4xl shadow-lg px-6 py-8 
+                   w-full max-w-full md:max-w-5xl cursor-pointer mx-4"
         onClick={handleSpeak}
       >
         <div className="text-center" style={{ fontFamily: "'KaiTi', 'STKaiti', serif" }}>
@@ -74,7 +74,7 @@ export default function ResultState({
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{
-                    delay: 0.3 + (lineIdx * 8 + charIdx) * 0.08,
+                    delay: 0.3 + (lineIdx * 12 + charIdx) * 0.08,
                     type: 'spring',
                     stiffness: 200,
                     damping: 12,

@@ -88,6 +88,9 @@ function SentencePage() {
     clientLog('当前轮次:', weightData.round);
 
     const sortedThemeChars = weightEngine.getSortedChars();
+    const charWeights = weightData.chars
+      .map(c => `${c.char}(${c.weight})`)
+      .join(' ');
     const config = loadConfig();
     const useHelpers = getEffectiveUseHelpers(bank, config.bankHelpers);
     const sortedFullChars = useHelpers
@@ -96,6 +99,7 @@ function SentencePage() {
     clientLog('加权排序(主题字):', sortedThemeChars);
     clientLog('使用助字:', useHelpers);
     clientLog('发送给 API 的完整字串:', sortedFullChars);
+    clientLog('权重信息:', charWeights);
     clientLog('主题字数:', sortedThemeChars.length, '总字数:', sortedFullChars.length);
 
     const startTime = Date.now();
@@ -107,6 +111,7 @@ function SentencePage() {
         body: JSON.stringify({
           bankId,
           sortedChars: sortedFullChars,
+          charWeights,
         }),
       });
 
@@ -164,14 +169,16 @@ function SentencePage() {
     setState('idle');
   }, [play]);
 
-  // 重生成
+  // 再来一句：直接重新生成，不经过 idle 状态
   const handleRegenerate = useCallback(() => {
     setSentence('');
     setUsedChars([]);
     setIsFallback(false);
     setErrorMsg('');
-    setState('idle');
-  }, []);
+    setState('loading');
+    // 先渲染 loading 动画，再开始生成
+    setTimeout(() => handleGenerate(), 100);
+  }, [handleGenerate]);
 
   if (!bank) return null;
 
