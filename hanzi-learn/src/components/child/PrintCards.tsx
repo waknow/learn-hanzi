@@ -11,10 +11,13 @@ interface PrintCardsProps {
 }
 
 const FONT_MAP: Record<PrintFont, string> = {
-  '楷体': "'KaiTi', 'STKaiti', serif",
-  '宋体': "'SimSun', 'Noto Serif CJK SC', serif",
+  '楷体': "'KaiTi', 'STKaiti', 'AR PL UKai CN', serif",
+  '宋体': "'SimSun', 'STSong', 'Noto Serif CJK SC', serif",
   '黑体': "'SimHei', 'Noto Sans CJK SC', sans-serif",
   '圆体': "'ZCOOL KuaiLe', cursive",
+  '微软雅黑': "'Microsoft YaHei', 'PingFang SC', sans-serif",
+  '苹方': "'PingFang SC', 'Microsoft YaHei', sans-serif",
+  '仿宋': "'FangSong', 'STFangsong', serif",
 };
 
 const CUTLINE_CLASS: Record<CutLine, string> = {
@@ -43,6 +46,9 @@ const FONT_OPTIONS = [
   { value: '宋体' as PrintFont, label: '宋体' },
   { value: '黑体' as PrintFont, label: '黑体' },
   { value: '圆体' as PrintFont, label: '圆体' },
+  { value: '微软雅黑' as PrintFont, label: '微软雅黑' },
+  { value: '苹方' as PrintFont, label: '苹方' },
+  { value: '仿宋' as PrintFont, label: '仿宋' },
 ];
 
 const CUT_OPTIONS = [

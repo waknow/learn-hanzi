@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-export type PrintFont = '楷体' | '宋体' | '黑体' | '圆体';
+export type PrintFont = '楷体' | '宋体' | '黑体' | '圆体' | '微软雅黑' | '苹方' | '仿宋';
 export type PrintSize = '36pt' | '48pt' | '60pt' | '72pt';
 export type CutLine = '虚线' | '圆点' | '实线标记' | '隐藏';
 

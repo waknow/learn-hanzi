@@ -65,7 +65,7 @@ export default function ResultState({
                    max-w-lg w-full cursor-pointer"
         onClick={handleSpeak}
       >
-        <div className="text-center">
+        <div className="text-center" style={{ fontFamily: "'KaiTi', 'STKaiti', serif" }}>
           {lines.map((line, lineIdx) => (
             <div key={lineIdx} className="flex justify-center flex-wrap gap-1 my-1">
               {line.split('').map((char, charIdx) => (
@@ -80,7 +80,7 @@ export default function ResultState({
                     damping: 12,
                   }}
                   className={`
-                    inline-block text-4xl md:text-5xl 
+                    inline-block text-5xl md:text-7xl 
                     ${/[\u4e00-\u9fff]/.test(char) ? 'text-gray-800' : 'text-gray-400'}
                     leading-relaxed
                   `}
