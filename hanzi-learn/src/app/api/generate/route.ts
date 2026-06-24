@@ -14,29 +14,50 @@ function log(...args: unknown[]) {
   console.log(`[${time}] [generate]`, ...args);
 }
 
-function buildPrompt(sortedChars: string, charWeights?: string): string {
-  const weightSection = charWeights
-    ? `\n各字权重（越高越优先使用）：${charWeights}`
-    : '';
+/** 系统提示词（不变部分，可被 DeepSeek prompt caching 缓存） */
+const SYSTEM_PROMPT = `你是一位专业幼儿老师，正在教小朋友认字，需要按照字库里的字来组成一个有趣的句子，句子内容积极、童趣、健康，禁止出现暴力、负面、辱骂、死亡等内容。
 
-  return `你是一位儿童语文老师，正在教小朋友认字。
-
-最重要：只从下面提供的字里选，不能加别的字。
-
-其他要求：
-- 只输出一个结果，不要多个
-- 输出格式：结果【通顺度-口语化】
-  例如：小猫【9-8】  或  日月星辰【8-7】
-- 通顺度评分（1-10）：读起来顺不顺
-- 口语化评分（1-10）：像不像平时说话
-- 尽量用排在前面的字${weightSection}
-- 不要标点符号
+规则：
+- 只用下面提供的字，不能加别的字
+- 提供的词库包含权重信息，数字越大，越优先使用
+- 尽量使用权重高的字，少用权重低的字
+- 尽量贴合幼儿说话的习惯，倾向可爱的词句
+- 优先确保通顺，而不是堆字凑字。如果两三个字的词语通顺度超过长句子，优先使用词语
+- 输出的内容中最后只有一个主旨，不要堆砌多个主旨
+- 只输出一个结果（一个字、一个词、或一个短句）
+- 输出格式：结果【自然程度分数数值-口语化分数数值】，例如：小猫【9-8】
+- 自然程度评分（1-10）：读起来是否自然，是否常用，自然度需要>=8，如果低于8，减少句子长度
+- 口语化评分（1-10）：像不像平时说话，不要太书面化，符合学龄前儿童认知
 - 内容积极、有童趣
 - 禁止：暴力、负面、辱骂、死亡
 
-可用字：${sortedChars}
-
 先输出结果，再输出评分，不要其他内容。`;
+
+/** 构建用户消息（每次变化的字列表和权重） */
+function buildUserMsg(
+  themeWeights?: string,
+  helpers?: string
+): string {
+  const parts: string[] = [];
+
+  if (themeWeights) {
+    try {
+      const arr: { char: string; weight: number }[] = JSON.parse(themeWeights);
+      // 按 weight 降序排列
+      arr.sort((a, b) => b.weight - a.weight);
+      const sortedJson = JSON.stringify(arr);
+      parts.push(`主题字（按weight从高到低）：${sortedJson}`);
+    } catch {
+      parts.push(`主题字及权重：${themeWeights}`);
+    }
+  }
+
+  if (helpers) parts.push(`助字（无权重，可随意使用）：${helpers}`);
+
+  // 明确说明 weight 越大越优先
+  parts.push('规则：weight数值越大，表示这个字越重要，越要优先使用。');
+
+  return parts.join('\n');
 }
 
 export async function POST(req: Request) {
@@ -45,11 +66,16 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { bankId, sortedChars, charWeights } = body as {
-      bankId: string; sortedChars: string; charWeights?: string;
+    const { bankId, sortedChars, themeWeights, helpers } = body as {
+      bankId: string; sortedChars: string; themeWeights?: string; helpers?: string;
     };
 
-    log(`[${requestId}] 请求参数:`, { bankId, sortedCharsLen: sortedChars?.length, hasWeights: !!charWeights });
+    log(`[${requestId}] 请求参数:`, {
+      bankId,
+      sortedCharsLen: sortedChars?.length,
+      hasWeights: !!themeWeights,
+      hasHelpers: !!helpers,
+    });
 
     if (!bankId || !sortedChars) {
       log(`[${requestId}] ❌ 缺少必要参数: bankId=${bankId}, sortedChars=${sortedChars}`);
@@ -85,17 +111,16 @@ export async function POST(req: Request) {
     }
 
     // 构造请求体
-    const prompt = buildPrompt(sortedCharsStr, charWeights);
-    const userMsg = `从这些字里选，输出一个结果：${sortedCharsStr}`;
+    const userMsg = buildUserMsg(themeWeights, helpers);
     const messages: { role: string; content: string }[] = [
-      { role: 'system', content: prompt },
+      { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userMsg },
     ];
 
     log(`[${requestId}] ====== DeepSeek 完整 Prompt ======`);
-    if (charWeights) log(`[${requestId}] [权重] ${charWeights}`);
-    log(`[${requestId}] [SYSTEM]\n${prompt}`);
-    log(`[${requestId}] [USER] ${userMsg}`);
+    if (themeWeights) log(`[${requestId}] [权重JSON] ${themeWeights}`);
+    log(`[${requestId}] [SYSTEM]\n${SYSTEM_PROMPT}`);
+    log(`[${requestId}] [USER]\n${userMsg}`);
     log(`[${requestId}] ====== Prompt 结束 ======`);
 
     // 最多重试 MAX_RETRIES 次，每次失败将原因回传给模型
@@ -180,8 +205,28 @@ export async function POST(req: Request) {
           continue;
         }
 
+        // 命中字权重日志
+        try {
+          if (themeWeights) {
+            const weightArr = JSON.parse(themeWeights) as { char: string; weight: number }[];
+            const weightMap = new Map(weightArr.map(w => [w.char, w.weight]));
+            const usedWeights = usedChars
+              .filter(c => weightMap.has(c))
+              .map(c => `${c}(${weightMap.get(c)})`);
+            if (usedWeights.length > 0) {
+              log(`[${requestId}] 命中字权重:`, usedWeights.join(' '));
+            }
+          }
+        } catch { /* weights parse error, skip */ }
+
         // 检查4：提取评分并校验
-        const scoreMatch = text.match(/【(\d+)-(\d+)】$/);
+        // 兼容两种格式：旧版【9-8】和新版【自然程度-9 口语化-9】
+        let matchResult = text.match(/【(?:自然程度-)?(\d+)\s+口语化-(\d+)】$/);
+        if (!matchResult) {
+          // 尝试旧格式
+          matchResult = text.match(/【(\d+)-(\d+)】$/);
+        }
+        const scoreMatch = matchResult;
         let fluencyScore = -1;
         let spokenScore = -1;
         if (scoreMatch) {
@@ -194,8 +239,8 @@ export async function POST(req: Request) {
         log(`[${requestId}] 检查4 - 自评: 通顺${fluencyScore} 口语${spokenScore} 平均${avgScore} ${avgScore >= MIN_SCORE ? `✅` : `❌ < ${MIN_SCORE}`}`);
 
         if (avgScore >= MIN_SCORE) {
-          // 移除评分后缀，只返回纯文本
-          const cleanText = text.replace(/【\d+-\d+】$/, '').trim();
+          // 移除评分后缀，只返回纯文本（兼容两种格式后缀）
+          const cleanText = text.replace(/【[^】]+】$/, '').trim();
           log(`[${requestId}] ✅✅✅ 全部检查通过！返回句子: "${cleanText}"`);
           log(`[${requestId}] 使用汉字:`, usedChars);
           return NextResponse.json({
@@ -207,7 +252,7 @@ export async function POST(req: Request) {
         } else {
           // 评分过低或格式不对，回传要求改进
           const reason = avgScore < 0
-            ? '输出格式不对，请在结果后面加上【通顺度-口语化】评分，例如：小猫【9-8】'
+            ? '输出格式不对，请在结果后面加上【自然程度-口语化】评分，例如：小猫【自然程度-9 口语化-9】'
             : `通顺度或口语化评分偏低（${avgScore}分），请输出更自然通顺的内容`;
           messages.push(
             { role: 'assistant', content: text },

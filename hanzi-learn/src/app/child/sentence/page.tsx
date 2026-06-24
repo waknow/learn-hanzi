@@ -72,35 +72,46 @@ function SentencePage() {
 
   // 生成句子
   const handleGenerate = useCallback(async () => {
-    if (!bank) return;
+    // 先设 loading，再检查 bank，确保无论什么路径 loading 状态都生效
+    setState('loading');
+    play('rocket');
+    if (!bank) {
+      clientLog('❌ bank 为空，无法生成');
+      setTimeout(() => setState('idle'), 500);
+      return;
+    }
 
     clientLog('===== 开始生成 =====');
     clientLog('字库:', bankId, bank.name);
     clientLog('字库汉字:', bank.chars);
     clientLog('完整字集（含助字）:', fullChars);
 
-    setState('loading');
-    play('rocket');
-
     // 获取权重数据
     const weightData = weightEngine.getWeightData();
     clientLog('当前权重:', weightData.chars.map(c => `${c.char}:${c.weight}`).join(', '));
     clientLog('当前轮次:', weightData.round);
+    clientLog(`权重数据量: ${weightData.chars.length} 个字 vs 字库: ${themeChars.length} 个字`);
+
+    // 检查权重数据与字库是否一致
+    const weightChars = new Set(weightData.chars.map(c => c.char));
+    const missing = themeChars.filter(c => !weightChars.has(c));
+    const extra = weightData.chars.filter(c => !themeChars.includes(c.char)).map(c => c.char);
+    if (missing.length > 0) clientLog('⚠️ 权重中缺少的字:', missing);
+    if (extra.length > 0) clientLog('⚠️ 权重中多余的字:', extra);
 
     const sortedThemeChars = weightEngine.getSortedChars();
-    const charWeights = weightData.chars
-      .map(c => `${c.char}(${c.weight})`)
-      .join(' ');
+    const themeWeights = JSON.stringify(
+      weightData.chars.map(c => ({ char: c.char, weight: c.weight }))
+    );
     const config = loadConfig();
     const useHelpers = getEffectiveUseHelpers(bank, config.bankHelpers);
-    const sortedFullChars = useHelpers
-      ? sortedThemeChars + HELPERS.join('')
-      : sortedThemeChars;
+    const helpersStr = useHelpers ? HELPERS.join('') : '';
+    const allChars = sortedThemeChars + helpersStr;
     clientLog('加权排序(主题字):', sortedThemeChars);
+    clientLog('权重JSON:', themeWeights);
     clientLog('使用助字:', useHelpers);
-    clientLog('发送给 API 的完整字串:', sortedFullChars);
-    clientLog('权重信息:', charWeights);
-    clientLog('主题字数:', sortedThemeChars.length, '总字数:', sortedFullChars.length);
+    clientLog('发送给 API 的完整字串:', allChars);
+    clientLog('主题字数:', sortedThemeChars.length, '总字数:', allChars.length);
 
     const startTime = Date.now();
 
@@ -110,8 +121,9 @@ function SentencePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bankId,
-          sortedChars: sortedFullChars,
-          charWeights,
+          sortedChars: allChars,
+          themeWeights,
+          helpers: helpersStr,
         }),
       });
 
@@ -162,22 +174,34 @@ function SentencePage() {
     }
   }, [bank, bankId, weightEngine, play, recordCall]);
 
-  // 加载超时
+  // 安全兜底：loading 超过 15 秒强制回到 idle
+  useEffect(() => {
+    if (state !== 'loading') return;
+    const timer = setTimeout(() => {
+      clientLog('⏰ 加载超时（15s），强制回到 idle');
+      play('error');
+      setErrorMsg('小脑袋想太久了，再试一次吧！');
+      setState('idle');
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [state, play]);
+
+  // 加载超时（传递给 LoadingState 的 12s 超时 UI 反馈）
   const handleTimeout = useCallback(() => {
+    clientLog('⏰ LoadingState 12s 超时');
     play('error');
     setErrorMsg('小脑袋想太久了，再试一次吧！');
     setState('idle');
   }, [play]);
 
-  // 再来一句：直接重新生成，不经过 idle 状态
+  // 再来一句：清空旧数据，直接重新生成
   const handleRegenerate = useCallback(() => {
     setSentence('');
     setUsedChars([]);
     setIsFallback(false);
     setErrorMsg('');
     setState('loading');
-    // 先渲染 loading 动画，再开始生成
-    setTimeout(() => handleGenerate(), 100);
+    handleGenerate();
   }, [handleGenerate]);
 
   if (!bank) return null;

@@ -15,12 +15,23 @@ import type { CharEntry } from '@/lib/types';
  * 管理指定字库的权重数据，提供加权排序和更新功能。
  */
 export function useWeightEngine(bankId: string, bankChars: string[]) {
-  /** 获取当前权重数据 */
+  /** 获取当前权重数据，自动适配字库变化 */
   const getWeightData = useCallback(() => {
     const allData = loadWeightData();
     const bankData = allData[bankId];
 
     if (bankData) {
+      // 检查字库是否变化（字数不同则重新初始化）
+      if (bankData.chars.length !== bankChars.length) {
+        console.log(`[weightEngine] 字库 ${bankId} 已变化: ${bankData.chars.length} → ${bankChars.length}，重新初始化`);
+        const fresh = {
+          round: 0,
+          chars: initCharEntries(bankChars),
+        };
+        allData[bankId] = fresh;
+        saveWeightData(allData);
+        return fresh;
+      }
       return bankData;
     }
 

@@ -29,7 +29,10 @@ export interface WeightData {
 export interface GenerateRequest {
   bankId: string;
   sortedChars: string;
-  charWeights?: string; // "字(权重)" 格式的字符串，如 "日(5) 月(3) 星(2)"
+  /** JSON 格式的权重数组，如 '[{"char":"日","weight":5},{"char":"月","weight":3}]' */
+  themeWeights?: string;
+  /** 通用助字串（无权重），如 "的了是在有" */
+  helpers?: string;
 }
 
 /** API 响应体 */
