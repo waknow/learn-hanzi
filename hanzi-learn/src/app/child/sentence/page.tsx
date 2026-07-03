@@ -7,8 +7,7 @@ import IdleState from '@/components/child/IdleState';
 import LoadingState from '@/components/child/LoadingState';
 import ResultState from '@/components/child/ResultState';
 import BackButton from '@/components/child/BackButton';
-import { findBankById, getFullBankChars, getEffectiveUseHelpers, HELPERS } from '@/lib/wordBanks';
-import { loadConfig } from '@/lib/storage';
+import { findBankById, getMergedBankChars } from '@/lib/wordBanks';
 import { useWeightEngine } from '@/hooks/useWeightEngine';
 import { useSound } from '@/hooks/useSound';
 import { useStats } from '@/hooks/useStats';
@@ -41,7 +40,10 @@ function SentencePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const bankId = searchParams.get('bank') || '';
-  const bank = findBankById(bankId);
+  const isComprehensive = bankId === 'comprehensive';
+  const bank = isComprehensive
+    ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
+    : findBankById(bankId);
 
   const { play } = useSound();
   const { recordCall } = useStats();
@@ -53,9 +55,8 @@ function SentencePage() {
   const [errorMsg, setErrorMsg] = useState('');
 
   // 权重引擎
-  const fullChars = bank ? getFullBankChars(bank) : [];
-  const themeChars = bank?.chars || [];
-  const weightEngine = useWeightEngine(bankId, themeChars);
+  const chars = bank?.chars || [];
+  const weightEngine = useWeightEngine(bankId, chars);
 
   // 无效字库
   useEffect(() => {
@@ -84,34 +85,23 @@ function SentencePage() {
     clientLog('===== 开始生成 =====');
     clientLog('字库:', bankId, bank.name);
     clientLog('字库汉字:', bank.chars);
-    clientLog('完整字集（含助字）:', fullChars);
-
     // 获取权重数据
     const weightData = weightEngine.getWeightData();
     clientLog('当前权重:', weightData.chars.map(c => `${c.char}:${c.weight}`).join(', '));
     clientLog('当前轮次:', weightData.round);
-    clientLog(`权重数据量: ${weightData.chars.length} 个字 vs 字库: ${themeChars.length} 个字`);
 
-    // 检查权重数据与字库是否一致
     const weightChars = new Set(weightData.chars.map(c => c.char));
-    const missing = themeChars.filter(c => !weightChars.has(c));
-    const extra = weightData.chars.filter(c => !themeChars.includes(c.char)).map(c => c.char);
+    const missing = chars.filter(c => !weightChars.has(c));
+    const extra = weightData.chars.filter(c => !chars.includes(c.char)).map(c => c.char);
     if (missing.length > 0) clientLog('⚠️ 权重中缺少的字:', missing);
     if (extra.length > 0) clientLog('⚠️ 权重中多余的字:', extra);
 
-    const sortedThemeChars = weightEngine.getSortedChars();
+    const sortedChars = weightEngine.getSortedChars();
     const themeWeights = JSON.stringify(
       weightData.chars.map(c => ({ char: c.char, weight: c.weight }))
     );
-    const config = loadConfig();
-    const useHelpers = getEffectiveUseHelpers(bank, config.bankHelpers);
-    const helpersStr = useHelpers ? HELPERS.join('') : '';
-    const allChars = sortedThemeChars + helpersStr;
-    clientLog('加权排序(主题字):', sortedThemeChars);
+    clientLog('加权排序:', sortedChars);
     clientLog('权重JSON:', themeWeights);
-    clientLog('使用助字:', useHelpers);
-    clientLog('发送给 API 的完整字串:', allChars);
-    clientLog('主题字数:', sortedThemeChars.length, '总字数:', allChars.length);
 
     const startTime = Date.now();
 
@@ -121,9 +111,8 @@ function SentencePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bankId,
-          sortedChars: allChars,
+          sortedChars: sortedChars,
           themeWeights,
-          helpers: helpersStr,
         }),
       });
 
