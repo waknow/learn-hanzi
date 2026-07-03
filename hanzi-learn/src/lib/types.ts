@@ -14,7 +14,6 @@ export interface WordBank {
   name: string;
   emoji: string;
   chars: string[];
-  useHelpers?: boolean; // 默认 true，家长页可关闭
 }
 
 /** 权重持久化结构 */
