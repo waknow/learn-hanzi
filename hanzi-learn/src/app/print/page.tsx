@@ -2,16 +2,17 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { findBankById, getFullBankChars } from '@/lib/wordBanks';
-import { loadConfig } from '@/lib/storage';
-import { getEffectiveUseHelpers } from '@/lib/wordBanks';
+import { findBankById, getMergedBankChars } from '@/lib/wordBanks';
 import PrintCards from '@/components/child/PrintCards';
 
 function PrintPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const bankId = searchParams.get('bank') || '';
-  const bank = findBankById(bankId);
+  const isComprehensive = bankId === 'comprehensive';
+  const bank = isComprehensive
+    ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
+    : findBankById(bankId);
 
   const [chars, setChars] = useState<string[]>([]);
 
@@ -20,10 +21,7 @@ function PrintPageInner() {
       router.push('/child');
       return;
     }
-    const config = loadConfig();
-    const useHelpers = getEffectiveUseHelpers(bank, config.bankHelpers);
-    const fullChars = useHelpers ? getFullBankChars(bank) : [...bank.chars];
-    setChars(fullChars);
+    setChars([...bank.chars]);
   }, [bank, router]);
 
   if (!bank) return null;
