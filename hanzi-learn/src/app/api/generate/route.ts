@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findExtraChars, findUsedChars, hasSensitiveContent } from '@/lib/validator';
 import { getFallbackSentence, pickFallbackUsedChars } from '@/lib/fallbackSentences';
-import { findBankById, getFullBankChars } from '@/lib/wordBanks';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 const MAX_RETRIES = 3;
@@ -34,16 +33,12 @@ const SYSTEM_PROMPT = `你是一位专业幼儿老师，正在教小朋友认字
 先输出结果，再输出评分，不要其他内容。`;
 
 /** 构建用户消息（每次变化的字列表和权重） */
-function buildUserMsg(
-  themeWeights?: string,
-  helpers?: string
-): string {
+function buildUserMsg(themeWeights?: string): string {
   const parts: string[] = [];
 
   if (themeWeights) {
     try {
       const arr: { char: string; weight: number }[] = JSON.parse(themeWeights);
-      // 按 weight 降序排列
       arr.sort((a, b) => b.weight - a.weight);
       const sortedJson = JSON.stringify(arr);
       parts.push(`主题字（按weight从高到低）：${sortedJson}`);
@@ -52,9 +47,6 @@ function buildUserMsg(
     }
   }
 
-  if (helpers) parts.push(`助字（无权重，可随意使用）：${helpers}`);
-
-  // 明确说明 weight 越大越优先
   parts.push('规则：weight数值越大，表示这个字越重要，越要优先使用。');
 
   return parts.join('\n');
@@ -66,15 +58,14 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { bankId, sortedChars, themeWeights, helpers } = body as {
-      bankId: string; sortedChars: string; themeWeights?: string; helpers?: string;
+    const { bankId, sortedChars, themeWeights } = body as {
+      bankId: string; sortedChars: string; themeWeights?: string;
     };
 
     log(`[${requestId}] 请求参数:`, {
       bankId,
       sortedCharsLen: sortedChars?.length,
       hasWeights: !!themeWeights,
-      hasHelpers: !!helpers,
     });
 
     if (!bankId || !sortedChars) {
@@ -99,7 +90,7 @@ export async function POST(req: Request) {
 
     if (!apiKey || apiKey === 'your_deepseek_api_key_here') {
       log(`[${requestId}] ⚠️ 无有效 API Key，使用保底句`);
-      const text = getFallbackSentence(bankId);
+      const text = getFallbackSentence();
       const usedChars = pickFallbackUsedChars(text, allowedSet);
       log(`[${requestId}] ✅ 保底句: "${text}", 用字:`, usedChars);
       return NextResponse.json({
@@ -111,7 +102,7 @@ export async function POST(req: Request) {
     }
 
     // 构造请求体
-    const userMsg = buildUserMsg(themeWeights, helpers);
+    const userMsg = buildUserMsg(themeWeights);
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userMsg },
@@ -268,7 +259,7 @@ export async function POST(req: Request) {
 
     // 全部重试失败，降级到保底句
     log(`[${requestId}] ⚠️ ${MAX_RETRIES} 次重试均失败，降级到保底句`);
-    const fallbackText = getFallbackSentence(bankId);
+    const fallbackText = getFallbackSentence();
     const fallbackUsedChars = pickFallbackUsedChars(fallbackText, allowedSet);
     log(`[${requestId}] ✅ 保底句: "${fallbackText}", 用字:`, fallbackUsedChars);
     return NextResponse.json({
