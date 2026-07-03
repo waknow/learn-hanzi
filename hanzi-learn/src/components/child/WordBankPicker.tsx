@@ -135,6 +135,33 @@ export default function WordBankPicker() {
             )}
           </motion.button>
         ))}
+
+        {/* 综合 — 所有字库合并 */}
+        <motion.button
+          key="comprehensive"
+          initial={{ y: 60, opacity: 0, scale: 0.8 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          transition={{
+            delay: banks.length * 0.05,
+            type: 'spring',
+            stiffness: 300,
+            damping: 15,
+          }}
+          whileTap={{ scale: 0.92 }}
+          whileHover={{ scale: 1.03 }}
+          onClick={() => handleSelect('comprehensive')}
+          className={`
+            aspect-square rounded-3xl relative
+            bg-gradient-to-br from-candy-purple/30 to-candy-pink/30
+            shadow-lg flex flex-col items-center justify-center gap-2
+            active:shadow-md transition-shadow
+          `}
+        >
+          <div className="w-16 h-16 rounded-2xl bg-candy-purple/20 flex items-center justify-center text-3xl">
+            📚
+          </div>
+          <span className="text-lg font-cartoon text-gray-700">综合</span>
+        </motion.button>
       </div>
     </div>
   );
