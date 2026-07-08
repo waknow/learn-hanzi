@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   hanzi-learn:
     build: .
@@ -8,6 +6,5 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
-    # 内网无需额外环境变量；如有需要可在此添加
-    # environment:
-    #   - DEEPSEEK_API_KEY=your_key_here
+    volumes:
+      - ./env:/app/env:ro

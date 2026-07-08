@@ -1,7 +1,5 @@
-ARG TARGETPLATFORM=linux/amd64
-
 # ===== 构建阶段 =====
-FROM --platform=$TARGETPLATFORM node:20-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -14,7 +12,7 @@ COPY . .
 RUN npm run build
 
 # ===== 运行阶段 =====
-FROM --platform=$TARGETPLATFORM node:20-alpine AS runner
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 
@@ -30,5 +28,5 @@ COPY --from=builder /app/next.config.js ./
 
 EXPOSE 3000
 
-# 绑定 0.0.0.0 以支持容器外访问
-CMD ["npx", "next", "start", "--hostname", "0.0.0.0"]
+# 使用本地 next 二进制（npx 会尝试下载新版导致问题）
+CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0"]
