@@ -28,5 +28,5 @@ COPY --from=builder /app/next.config.js ./
 
 EXPOSE 3000
 
-# 使用本地 next 二进制（npx 会尝试下载新版导致问题）
-CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0"]
+# 使用 npx --no-install 强制用本地 next，避免 npx 下载新版
+CMD ["npx", "--no-install", "next", "start", "--hostname", "0.0.0.0"]
