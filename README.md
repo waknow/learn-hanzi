@@ -110,3 +110,61 @@ npm run build    # 生产构建
 npm run start    # 启动生产服务
 npm run lint     # 代码检查
 ```
+
+## Docker 构建与部署
+
+项目根 `hanzi-learn/` 下提供了一套 Docker 构建方案，适用于 x86_64 (amd64) 服务器部署。
+
+### 构建镜像
+
+```bash
+cd hanzi-learn
+
+# 方式一：使用构建脚本（自动带代理 + 导出 tar 包）
+bash scripts/build.sh
+
+# 方式二：通过 npm script
+npm run docker:build
+
+# 方式三：手动构建
+docker build \
+  --build-arg HTTP_PROXY=http://host.docker.internal:7890 \
+  --build-arg HTTPS_PROXY=http://host.docker.internal:7890 \
+  --platform linux/amd64 \
+  -t hanzi-learn .
+```
+
+构建完成后会在项目根生成 `hanzi-learn-image.tar`。
+
+### 配置密钥
+
+容器通过挂载 `env` 文件注入环境变量，密钥不打包进镜像：
+
+```bash
+# 复制模板并编辑
+cp env.example env
+# 填入 DEEPSEEK_API_KEY=sk-xxx
+```
+
+### 本地运行（docker-compose）
+
+```bash
+docker compose up -d
+# 访问 http://localhost:3000
+```
+
+### 部署到服务器
+
+```bash
+# 1. 将 tar 包和 env 文件传到服务器
+scp hanzi-learn-image.tar env user@server:/path/
+
+# 2. 服务器上加载镜像并运行
+docker load -i hanzi-learn-image.tar
+docker run -d \
+  --name hanzi-learn \
+  -v $(pwd)/env:/app/env:ro \
+  -p 3000:3000 \
+  --restart unless-stopped \
+  hanzi-learn
+```
