@@ -8,6 +8,7 @@ interface ResultStateProps {
   text: string;
   usedChars: string[];
   isFallback: boolean;
+  consecutiveCount: number;
   onRegenerate: () => void;
 }
 
@@ -22,6 +23,7 @@ export default function ResultState({
   text,
   usedChars,
   isFallback,
+  consecutiveCount,
   onRegenerate,
 }: ResultStateProps) {
   const { speak, play } = useSound();
@@ -56,6 +58,19 @@ export default function ResultState({
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
+      {/* 连续计数徽章 */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.2 }}
+        className="fixed top-4 right-4 z-20 px-4 py-2 rounded-full bg-white/70 backdrop-blur-sm shadow-sm flex items-center gap-2"
+      >
+        <span className="text-lg">✨</span>
+        <span className="text-candy-purple font-cartoon text-base font-bold">
+          已连造 {consecutiveCount} 句
+        </span>
+      </motion.div>
+
       {/* 句子展示 */}
       <motion.div
         initial={{ y: 40, opacity: 0 }}

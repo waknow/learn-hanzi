@@ -6,14 +6,16 @@ import { useSound } from '@/hooks/useSound';
 
 interface IdleStateProps {
   onGenerate: () => void;
+  consecutiveCount?: number;
 }
 
 /**
  * 状态 A：仅一个大按钮
  * - 呼吸动效引导点击
  * - 8秒无操作显示引导箭头
+ * - 如有上轮连续计数则显示鼓励信息
  */
-export default function IdleState({ onGenerate }: IdleStateProps) {
+export default function IdleState({ onGenerate, consecutiveCount = 0 }: IdleStateProps) {
   const { init } = useSound();
   const [showArrow, setShowArrow] = useState(false);
 
@@ -30,6 +32,17 @@ export default function IdleState({ onGenerate }: IdleStateProps) {
 
   return (
     <div className="relative flex flex-col items-center justify-center min-h-screen">
+      {/* 上次连造鼓励 */}
+      {consecutiveCount > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 px-4 py-2 rounded-full bg-candy-purple/10 text-candy-purple text-sm font-cartoon"
+        >
+          🎉 上次连造了 {consecutiveCount} 句
+        </motion.div>
+      )}
+
       {/* 引导箭头 */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}

@@ -53,6 +53,8 @@ function SentencePage() {
   const [usedChars, setUsedChars] = useState<string[]>([]);
   const [isFallback, setIsFallback] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  // 当前会话连续生成计数
+  const [consecutiveCount, setConsecutiveCount] = useState(0);
 
   // 权重引擎
   const chars = bank?.chars || [];
@@ -150,6 +152,9 @@ function SentencePage() {
         // 记录统计
         recordCall(data.text, bankId, data.usedChars || []);
 
+        // 连续计数 +1
+        setConsecutiveCount((c) => c + 1);
+
         setState('result');
       } else {
         clientLog(`❌ 请求失败: ${data.error || '未知错误'}`);
@@ -209,7 +214,9 @@ function SentencePage() {
       )}
 
       <AnimatePresence mode="wait">
-        {state === 'idle' && <IdleState key="idle" onGenerate={handleGenerate} />}
+        {state === 'idle' && (
+          <IdleState key="idle" onGenerate={handleGenerate} consecutiveCount={consecutiveCount} />
+        )}
         {state === 'loading' && <LoadingState key="loading" onTimeout={handleTimeout} />}
         {state === 'result' && (
           <ResultState
@@ -217,6 +224,7 @@ function SentencePage() {
             text={sentence}
             usedChars={usedChars}
             isFallback={isFallback}
+            consecutiveCount={consecutiveCount}
             onRegenerate={handleRegenerate}
           />
         )}
