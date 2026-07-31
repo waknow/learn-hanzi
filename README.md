@@ -160,6 +160,7 @@ AI 提示词采用 **自评分机制**：每次输出附带「自然程度分数
 |------|------|------|
 | `DEEPSEEK_API_KEY` | 否 | DeepSeek API 密钥。不填则使用内置保底句池 |
 | `DEEPSEEK_MODEL` | 否 | 生成模型名，默认 `deepseek-v4-flash`，可切换为 `deepseek-v4-pro` |
+| `STATE_FILE` | 否 | 服务端状态文件路径，默认 `data/state.json`（Docker 下为 `/app/data/state.json`） |
 
 环境变量文件位于 `hanzi-learn/env`，Docker 容器通过挂载此文件注入。
 
@@ -269,6 +270,20 @@ docker build \
 
 构建完成后会在 `hanzi-learn/` 目录生成带版本号的 tar 包，如 `hanzi-learn-image-1.0.0.tar`。
 
+### 数据持久化
+
+学习进度（字库权重、学习统计、家长配置）保存在服务端 `data/state.json`（本地开发目录
+或 Docker 内 `/app/data/`），换浏览器/设备不丢失。Docker 部署时通过 volume 挂载持久化：
+
+```yaml
+volumes:
+  - ./env:/app/env:ro
+  - ./data:/app/data
+```
+
+> 首次升级到该版本时，老用户浏览器里的 localStorage 数据会在打开应用后自动迁移到服务端。
+> 打印配置（字体/字号等）属设备偏好，仍保存在浏览器本地。
+
 ### 配置密钥
 
 容器通过挂载 `env` 文件注入环境变量，密钥不打包进镜像：
@@ -298,6 +313,7 @@ docker load -i hanzi-learn-image-1.0.0.tar
 docker run -d \
   --name hanzi-learn \
   -v $(pwd)/env:/app/env:ro \
+  -v $(pwd)/data:/app/data \
   -p 3000:3000 \
   --restart unless-stopped \
   hanzi-learn:1.0.0

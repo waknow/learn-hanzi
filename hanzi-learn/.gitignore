@@ -36,3 +36,4 @@ next-env.d.ts
 # docker
 /hanzi-learn-image.tar
 /hanzi-learn-image-*.tar
+/data/

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import StateSync from '@/components/shared/StateSync';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -36,7 +37,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen">
+        <StateSync />
+        {children}
+      </body>
     </html>
   );
 }
