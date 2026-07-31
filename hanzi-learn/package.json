@@ -9,7 +9,8 @@
     "start": "next start",
     "start:lan": "next start --hostname 0.0.0.0",
     "lint": "next lint",
-    "docker:build": "bash scripts/build.sh"
+    "docker:build": "bash scripts/build.sh",
+    "tag": "bash scripts/tag.sh"
   },
   "dependencies": {
     "dotenv": "^16.6.1",

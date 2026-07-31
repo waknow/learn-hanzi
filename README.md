@@ -129,7 +129,8 @@ hanzi-learn/
 ├── public/
 │   └── manifest.json                   # PWA manifest
 ├── scripts/
-│   └── build.sh                        # Docker 构建脚本
+│   ├── build.sh                        # Docker 构建脚本（含版本号解析）
+│   └── tag.sh                          # 版本打 tag 脚本
 ├── Dockerfile                          # 多阶段 Docker 构建
 ├── docker-compose.yml                  # Docker Compose 配置
 ├── next.config.js                      # Next.js 配置（含 env 加载）
@@ -198,26 +199,66 @@ npm run lint         # 代码检查
 
 项目提供了一套 Docker 构建方案，适用于 x86_64 (amd64) 服务器部署。
 
+### 版本机制
+
+镜像构建时自动携带版本信息，来源优先级如下：
+
+1. `build.sh` 第二个参数显式指定（如 `bash scripts/build.sh hanzi-learn 1.2.0`）
+2. 最近的 git tag（如 `v1.0.0` → 版本 `1.0.0`）
+3. `package.json` 的 `version` 字段
+
+版本信息会体现在三个地方：
+
+| 位置 | 形式 |
+|------|------|
+| 镜像 tag | `hanzi-learn:1.0.0` + `hanzi-learn:latest` |
+| 导出文件名 | `hanzi-learn-image-1.0.0.tar` |
+| 镜像内部 | OCI LABEL + `APP_VERSION`/`GIT_COMMIT` 环境变量 + `public/version.json` |
+
+通过 `docker inspect` 可查看镜像内嵌的版本元数据：
+
+```bash
+docker inspect hanzi-learn:1.0.0 --format '{{index .Config.Labels "org.opencontainers.image.version"}}'
+```
+
+### 版本管理（git tag）
+
+```bash
+cd hanzi-learn
+
+bash scripts/tag.sh            # 基于 package.json 版本自动 +1 patch 并打 tag
+bash scripts/tag.sh 1.1.0      # 指定版本打 tag
+bash scripts/tag.sh 1.1.0 -m "新功能发布"  # 带注释
+npm run tag                    # 等价于 bash scripts/tag.sh
+```
+
+打 tag 时会自动同步 `package.json` 的版本号（如不一致）。
+
 ### 构建镜像
 
 ```bash
 cd hanzi-learn
 
-# 方式一：使用构建脚本（自动带代理 + 导出 tar 包）
+# 方式一：使用构建脚本（自动带代理 + 导出 tar 包，版本取自最近 git tag）
 bash scripts/build.sh
+
+# 指定镜像名 / 版本
+bash scripts/build.sh hanzi-learn 1.2.0
 
 # 方式二：通过 npm script
 npm run docker:build
 
-# 方式三：手动构建
+# 方式三：手动构建（版本信息缺省为 0.0.0-dev）
 docker build \
   --build-arg HTTP_PROXY=http://host.docker.internal:7890 \
   --build-arg HTTPS_PROXY=http://host.docker.internal:7890 \
+  --build-arg APP_VERSION=1.0.0 \
+  --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
   --platform linux/amd64 \
-  -t hanzi-learn .
+  -t hanzi-learn:1.0.0 .
 ```
 
-构建完成后会在 `hanzi-learn/` 目录生成 `hanzi-learn-image.tar`。
+构建完成后会在 `hanzi-learn/` 目录生成带版本号的 tar 包，如 `hanzi-learn-image-1.0.0.tar`。
 
 ### 配置密钥
 
@@ -240,15 +281,15 @@ docker compose up -d
 
 ```bash
 # 1. 将 tar 包和 env 文件传到服务器
-#    tar 包位置: hanzi-learn/hanzi-learn-image.tar
-scp hanzi-learn/hanzi-learn-image.tar hanzi-learn/env user@server:/path/
+#    tar 包位置: hanzi-learn/hanzi-learn-image-<版本>.tar
+scp hanzi-learn/hanzi-learn-image-1.0.0.tar hanzi-learn/env user@server:/path/
 
 # 2. 服务器上加载镜像并运行
-docker load -i hanzi-learn-image.tar
+docker load -i hanzi-learn-image-1.0.0.tar
 docker run -d \
   --name hanzi-learn \
   -v $(pwd)/env:/app/env:ro \
   -p 3000:3000 \
   --restart unless-stopped \
-  hanzi-learn
+  hanzi-learn:1.0.0
 ```

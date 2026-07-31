@@ -1,6 +1,7 @@
 services:
   hanzi-learn:
     build: .
+    image: hanzi-learn:latest
     container_name: hanzi-learn
     platform: linux/amd64
     ports:
