@@ -3,9 +3,16 @@ import { findExtraChars, findUsedChars, hasSensitiveContent } from '@/lib/valida
 import { getFallbackSentence, pickFallbackUsedChars } from '@/lib/fallbackSentences';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+// 模型名：默认 deepseek-v4-flash（DeepSeek V4 系列，旧名 deepseek-chat 计划 2026-07-24 停用）
+// 可用环境变量 DEEPSEEK_MODEL 覆盖，如 deepseek-v4-pro
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const MAX_RETRIES = 3;
 const MIN_USED_CHARS = 1;
-const MIN_SCORE = 5; // 自评分数低于此值则重试
+// 自评阈值：任一维度低于各自阈值则重试（模型自评容易虚高，阈值从严）
+const MIN_FLUENCY = 8;    // 自然度
+const MIN_SPOKEN = 6;     // 口语化
+const MIN_COMPLETE = 8;   // 意思完整度
+const MIN_SCORE = 7;      // 三维平均分下限（日志参考）
 
 /** 带时间戳的日志 */
 function log(...args: unknown[]) {
@@ -20,13 +27,18 @@ const SYSTEM_PROMPT = `你是一位专业幼儿老师，正在教小朋友认字
 - 只用下面提供的字，不能加别的字
 - 提供的词库包含权重信息，数字越大，越优先使用
 - 尽量使用权重高的字，少用权重低的字
-- 尽量贴合幼儿说话的习惯，倾向可爱的词句
+- 意思和通顺永远排在第一位：如果权重高的字实在组不成合理句子，宁可放弃它们改用其他字，绝不为了凑字牺牲意思
+- 输出的内容必须表达一个完整、明确的意思（谁/什么 + 做什么/怎么样），并且符合现实生活常识、描述真实存在的事情。禁止“家是圆的”“圆圆的家”这类意思荒谬、不符合常识的句子
+- 如果给定字实在组不成意思完整且符合常识的句子，宁可输出最短的合理词语（如“圆圆的”），也不要硬凑荒谬句子
+- 内容贴近小朋友的日常生活（家里、幼儿园、动物、食物、天气、游戏等），符合学龄前儿童认知
+- 倾向可爱的词句，像小朋友平时说话
 - 优先确保通顺，而不是堆字凑字。如果两三个字的词语通顺度超过长句子，优先使用词语
 - 输出的内容中最后只有一个主旨，不要堆砌多个主旨
 - 只输出一个结果（一个字、一个词、或一个短句）
-- 输出格式：结果【自然程度分数数值-口语化分数数值】，例如：小猫【9-8】
-- 自然程度评分（1-10）：读起来是否自然，是否常用，自然度需要>=8，如果低于8，减少句子长度
-- 口语化评分（1-10）：像不像平时说话，不要太书面化，符合学龄前儿童认知
+- 输出格式：结果【自然程度-口语化-完整度】，例如：小猫【自然程度-9 口语化-9 完整度-9】
+- 自然程度评分（1-10）：读起来是否自然、常用。必须>=8，如果低于8，减少句子长度
+- 口语化评分（1-10）：像不像平时说话，不要太书面化
+- 完整度评分（1-10）：意思是否完整明确、是否符合常识。必须>=8
 - 内容积极、有童趣
 - 禁止：暴力、负面、辱骂、死亡
 
@@ -119,11 +131,14 @@ export async function POST(req: Request) {
       log(`[${requestId}] ====== 尝试 ${attempt + 1}/${MAX_RETRIES} ======`);
 
       const requestBody = {
-        model: 'deepseek-chat',
+        model: DEEPSEEK_MODEL,
         messages,
-        temperature: 0.5,
+        // V4 系列默认开启思考模式；句子生成无需推理，显式关闭以降低延迟与成本
+        thinking: { type: 'disabled' },
+        temperature: 0.4,
         max_tokens: 300,
       };
+      log(`[${requestId}] 请求模型: ${DEEPSEEK_MODEL} (thinking: disabled)`);
 
       try {
         const startTime = Date.now();
@@ -172,8 +187,14 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // 检查2：越界字
-        const extraChars = findExtraChars(text, allowedSet);
+        // 剥离评分后缀（避免“自然程度/口语化/完整度”等标签字被误判为越界字）
+        const scoreSuffixMatch = text.match(/【[^】]+】$/);
+        const textBody = scoreSuffixMatch
+          ? text.slice(0, scoreSuffixMatch.index ?? text.length)
+          : text;
+
+        // 检查2：越界字（基于去掉评分后缀的正文）
+        const extraChars = findExtraChars(textBody, allowedSet);
         log(`[${requestId}] 检查2 - 越界字: ${extraChars.length > 0 ? `❌ 发现 ${extraChars}: ${JSON.stringify(extraChars)}` : '✅ 通过'}`);
         if (extraChars.length > 0) {
           // 回传：列出哪些字越界了
@@ -184,8 +205,8 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // 检查3：最少使用字数量
-        const usedChars = findUsedChars(text, allowedSet);
+        // 检查3：最少使用字数量（基于正文）
+        const usedChars = findUsedChars(textBody, allowedSet);
         log(`[${requestId}] 检查3 - 最少字数: ${usedChars.length < MIN_USED_CHARS ? `❌ 只用 ${usedChars.length} 个字` : `✅ 通过 (${usedChars.length}个)`}`);
         if (usedChars.length < MIN_USED_CHARS) {
           // 回传：至少用 MIN_USED_CHARS 个字
@@ -211,26 +232,40 @@ export async function POST(req: Request) {
         } catch { /* weights parse error, skip */ }
 
         // 检查4：提取评分并校验
-        // 兼容两种格式：旧版【9-8】和新版【自然程度-9 口语化-9】
-        let matchResult = text.match(/【(?:自然程度-)?(\d+)\s+口语化-(\d+)】$/);
-        if (!matchResult) {
-          // 尝试旧格式
-          matchResult = text.match(/【(\d+)-(\d+)】$/);
-        }
-        const scoreMatch = matchResult;
+        // 正式格式：【自然程度-9 口语化-9 完整度-9】
+        // 兼容旧格式：【自然程度-9 口语化-9】和【9-8】（缺完整度视为不通过）
         let fluencyScore = -1;
         let spokenScore = -1;
+        let completeScore = -1;
+        let scoreMatch = text.match(/【自然程度-(\d+)\s+口语化-(\d+)\s+完整度-(\d+)】$/);
         if (scoreMatch) {
           fluencyScore = parseInt(scoreMatch[1], 10);
           spokenScore = parseInt(scoreMatch[2], 10);
+          completeScore = parseInt(scoreMatch[3], 10);
+        } else {
+          // 兼容旧格式
+          scoreMatch = text.match(/【(?:自然程度-)?(\d+)\s+口语化-(\d+)】$/);
+          if (scoreMatch) {
+            fluencyScore = parseInt(scoreMatch[1], 10);
+            spokenScore = parseInt(scoreMatch[2], 10);
+          } else {
+            scoreMatch = text.match(/【(\d+)-(\d+)】$/);
+            if (scoreMatch) {
+              fluencyScore = parseInt(scoreMatch[1], 10);
+              spokenScore = parseInt(scoreMatch[2], 10);
+            }
+          }
         }
-        const avgScore = fluencyScore >= 1 && spokenScore >= 1
-          ? Math.round((fluencyScore + spokenScore) / 2)
+        const avgScore = fluencyScore >= 1 && spokenScore >= 1 && completeScore >= 1
+          ? Math.round((fluencyScore + spokenScore + completeScore) / 3)
           : -1;
-        log(`[${requestId}] 检查4 - 自评: 通顺${fluencyScore} 口语${spokenScore} 平均${avgScore} ${avgScore >= MIN_SCORE ? `✅` : `❌ < ${MIN_SCORE}`}`);
+        const scoresOk = fluencyScore >= MIN_FLUENCY
+          && spokenScore >= MIN_SPOKEN
+          && completeScore >= MIN_COMPLETE;
+        log(`[${requestId}] 检查4 - 自评: 自然${fluencyScore} 口语${spokenScore} 完整${completeScore} 平均${avgScore} ${scoresOk ? '✅' : '❌ 未达阈值'}`);
 
-        if (avgScore >= MIN_SCORE) {
-          // 移除评分后缀，只返回纯文本（兼容两种格式后缀）
+        if (scoresOk) {
+          // 移除评分后缀，只返回纯文本（兼容三种格式后缀）
           const cleanText = text.replace(/【[^】]+】$/, '').trim();
           log(`[${requestId}] ✅✅✅ 全部检查通过！返回句子: "${cleanText}"`);
           log(`[${requestId}] 使用汉字:`, usedChars);
@@ -241,13 +276,20 @@ export async function POST(req: Request) {
             isFallback: false,
           });
         } else {
-          // 评分过低或格式不对，回传要求改进
-          const reason = avgScore < 0
-            ? '输出格式不对，请在结果后面加上【自然程度-口语化】评分，例如：小猫【自然程度-9 口语化-9】'
-            : `通顺度或口语化评分偏低（${avgScore}分），请输出更自然通顺的内容`;
+          // 评分过低、格式不对或缺维度，回传要求改进
+          let reason: string;
+          if (!scoreMatch) {
+            reason = '输出格式不对，请在结果后面加上【自然程度-口语化-完整度】评分，例如：小猫【自然程度-9 口语化-9 完整度-9】';
+          } else if (completeScore < 0) {
+            reason = '缺少意思完整度评分，请按【自然程度-X 口语化-X 完整度-X】格式重新输出';
+          } else if (fluencyScore < MIN_FLUENCY || completeScore < MIN_COMPLETE) {
+            reason = `当前评分过低（自然${fluencyScore} 口语${spokenScore} 完整${completeScore}），句子必须意思完整、符合常识、自然通顺，请重新输出`;
+          } else {
+            reason = `口语化评分偏低（${spokenScore}），请像小朋友平时说话一样重新输出`;
+          }
           messages.push(
             { role: 'assistant', content: text },
-            { role: 'user', content: reason }
+            { role: 'user', content: `${reason}。另外请换一个与之前不同的内容` }
           );
           continue;
         }

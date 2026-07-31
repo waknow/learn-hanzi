@@ -159,6 +159,7 @@ AI 提示词采用 **自评分机制**：每次输出附带「自然程度分数
 | 变量 | 必填 | 说明 |
 |------|------|------|
 | `DEEPSEEK_API_KEY` | 否 | DeepSeek API 密钥。不填则使用内置保底句池 |
+| `DEEPSEEK_MODEL` | 否 | 生成模型名，默认 `deepseek-v4-flash`，可切换为 `deepseek-v4-pro` |
 
 环境变量文件位于 `hanzi-learn/env`，Docker 容器通过挂载此文件注入。
 
