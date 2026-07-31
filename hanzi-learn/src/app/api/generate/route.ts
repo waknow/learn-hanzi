@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { findExtraChars, findUsedChars, hasSensitiveContent } from '@/lib/validator';
 import { getFallbackSentence, pickFallbackUsedChars } from '@/lib/fallbackSentences';
+import { readState } from '@/lib/server/stateStore';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 // 模型名：默认 deepseek-v4-flash（DeepSeek V4 系列，旧名 deepseek-chat 计划 2026-07-24 停用）
@@ -13,6 +14,47 @@ const MIN_FLUENCY = 8;    // 自然度
 const MIN_SPOKEN = 6;     // 口语化
 const MIN_COMPLETE = 8;   // 意思完整度
 const MIN_SCORE = 7;      // 三维平均分下限（日志参考）
+
+/* ===== 最近生成历史（避免重复生成相同内容） ===== */
+
+/** 每个字库最多记住的最近句子数 */
+const RECENT_LIMIT = 8;
+/** 本次运行期间各字库已展示的句子（内存，最及时；跨重启历史见 getRecentShown） */
+const recentSentences = new Map<string, string[]>();
+
+/** 记录一次已展示的句子（AI 生成或保底句），供后续请求避免重复 */
+function recordShown(bankId: string, text: string) {
+  const list = recentSentences.get(bankId) ?? [];
+  // 与最近一条完全相同则跳过
+  if (list[list.length - 1] === text) return;
+  list.push(text);
+  if (list.length > RECENT_LIMIT) list.splice(0, list.length - RECENT_LIMIT);
+  recentSentences.set(bankId, list);
+}
+
+/** 取该字库最近展示的句子（内存历史 + 持久化 sentenceHistory，去重，最多 RECENT_LIMIT 条） */
+function getRecentShown(bankId: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  const push = (t: string) => {
+    const clean = t.trim();
+    if (!clean || seen.has(clean)) return;
+    seen.add(clean);
+    result.push(clean);
+  };
+  // 1) 内存历史（本次运行，最新在队尾 → 反序取最近）
+  for (const t of [...(recentSentences.get(bankId) ?? [])].reverse()) push(t);
+  // 2) 持久化历史（state.json，客户端 recordCall 推送，最新在前）
+  try {
+    const state = readState();
+    for (const r of state.stats.sentenceHistory) {
+      if (r.bankId === bankId) push(r.text);
+    }
+  } catch {
+    // 读取失败忽略，仅用内存历史
+  }
+  return result.slice(0, RECENT_LIMIT);
+}
 
 /** 带时间戳的日志 */
 function log(...args: unknown[]) {
@@ -45,7 +87,7 @@ const SYSTEM_PROMPT = `你是一位专业幼儿老师，正在教小朋友认字
 先输出结果，再输出评分，不要其他内容。`;
 
 /** 构建用户消息（每次变化的字列表和权重） */
-function buildUserMsg(themeWeights?: string): string {
+function buildUserMsg(themeWeights?: string, recentShown?: string[]): string {
   const parts: string[] = [];
   let charsOnly = '';
 
@@ -65,6 +107,11 @@ function buildUserMsg(themeWeights?: string): string {
   // 纯文本可用字列表：模型对 JSON 中的字遵守较弱，空格分隔单字显式列出，降低越界概率
   if (charsOnly) {
     parts.push(`可用字（只能从这些字里选，绝不能使用任何其他字）：${charsOnly.split('').join(' ')}`);
+  }
+
+  // 最近生成历史：避免重复输出相同内容
+  if (recentShown && recentShown.length > 0) {
+    parts.push(`最近已经生成过这些句子，禁止重复生成其中任何一个，请输出完全不同的内容（仍只能用可用字）：${recentShown.join('、')}`);
   }
 
   return parts.join('\n');
@@ -110,6 +157,7 @@ export async function POST(req: Request) {
       log(`[${requestId}] ⚠️ 无有效 API Key，使用保底句`);
       const text = getFallbackSentence();
       const usedChars = pickFallbackUsedChars(text, allowedSet);
+      recordShown(bankId, text);
       log(`[${requestId}] ✅ 保底句: "${text}", 用字:`, usedChars);
       return NextResponse.json({
         text,
@@ -119,8 +167,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // 构造请求体
-    const userMsg = buildUserMsg(themeWeights);
+    // 构造请求体（注入该字库最近生成历史，避免重复）
+    const recentShown = getRecentShown(bankId);
+    if (recentShown.length > 0) {
+      log(`[${requestId}] 最近生成历史(${recentShown.length}条):`, recentShown.join('、'));
+    }
+    const userMsg = buildUserMsg(themeWeights, recentShown);
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userMsg },
@@ -289,6 +341,18 @@ export async function POST(req: Request) {
         if (scoresOk) {
           // 移除评分后缀，只返回纯文本（兼容三种格式后缀）
           const cleanText = text.replace(/【[^】]+】$/, '').trim();
+
+          // 检查5：与最近生成历史重复（硬拦截，模型无视软约束时兜底）
+          if (recentShown.includes(cleanText)) {
+            log(`[${requestId}] 检查5 - 与最近历史重复: ❌ "${cleanText}"`);
+            messages.push(
+              { role: 'assistant', content: text },
+              { role: 'user', content: `“${cleanText}”这个句子最近已经生成过了，请换一个完全不同的词或短句。直接输出结果和评分，不要任何解释` }
+            );
+            continue;
+          }
+
+          recordShown(bankId, cleanText);
           log(`[${requestId}] ✅✅✅ 全部检查通过！返回句子: "${cleanText}"`);
           log(`[${requestId}] 使用汉字:`, usedChars);
           return NextResponse.json({
@@ -325,6 +389,7 @@ export async function POST(req: Request) {
     log(`[${requestId}] ⚠️ ${MAX_RETRIES} 次重试均失败，降级到保底句`);
     const fallbackText = getFallbackSentence();
     const fallbackUsedChars = pickFallbackUsedChars(fallbackText, allowedSet);
+    recordShown(bankId, fallbackText);
     log(`[${requestId}] ✅ 保底句: "${fallbackText}", 用字:`, fallbackUsedChars);
     return NextResponse.json({
       text: fallbackText,
