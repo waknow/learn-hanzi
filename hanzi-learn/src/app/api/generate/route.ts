@@ -47,6 +47,7 @@ const SYSTEM_PROMPT = `你是一位专业幼儿老师，正在教小朋友认字
 /** 构建用户消息（每次变化的字列表和权重） */
 function buildUserMsg(themeWeights?: string): string {
   const parts: string[] = [];
+  let charsOnly = '';
 
   if (themeWeights) {
     try {
@@ -54,12 +55,17 @@ function buildUserMsg(themeWeights?: string): string {
       arr.sort((a, b) => b.weight - a.weight);
       const sortedJson = JSON.stringify(arr);
       parts.push(`主题字（按weight从高到低）：${sortedJson}`);
+      charsOnly = arr.map((c) => c.char).join('');
     } catch {
       parts.push(`主题字及权重：${themeWeights}`);
     }
   }
 
   parts.push('规则：weight数值越大，表示这个字越重要，越要优先使用。');
+  // 纯文本可用字列表：模型对 JSON 中的字遵守较弱，空格分隔单字显式列出，降低越界概率
+  if (charsOnly) {
+    parts.push(`可用字（只能从这些字里选，绝不能使用任何其他字）：${charsOnly.split('').join(' ')}`);
+  }
 
   return parts.join('\n');
 }
@@ -127,18 +133,22 @@ export async function POST(req: Request) {
     log(`[${requestId}] ====== Prompt 结束 ======`);
 
     // 最多重试 MAX_RETRIES 次，每次失败将原因回传给模型
+    // 记录本轮已被拒绝的输出，用于检测模型固执重复
+    const attemptedOutputs: string[] = [];
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       log(`[${requestId}] ====== 尝试 ${attempt + 1}/${MAX_RETRIES} ======`);
 
+      // 重试时逐步提高随机性，打破模型重复输出同一内容的僵局
+      const temperature = [0.4, 0.7, 1.0][attempt] ?? 1.0;
       const requestBody = {
         model: DEEPSEEK_MODEL,
         messages,
         // V4 系列默认开启思考模式；句子生成无需推理，显式关闭以降低延迟与成本
         thinking: { type: 'disabled' },
-        temperature: 0.4,
+        temperature,
         max_tokens: 300,
       };
-      log(`[${requestId}] 请求模型: ${DEEPSEEK_MODEL} (thinking: disabled)`);
+      log(`[${requestId}] 请求模型: ${DEEPSEEK_MODEL} (thinking: disabled) 温度: ${temperature}`);
 
       try {
         const startTime = Date.now();
@@ -170,7 +180,19 @@ export async function POST(req: Request) {
           // 回传：告诉模型不能返回空
           messages.push(
             { role: 'assistant', content: '' },
-            { role: 'user', content: '不能输出空内容，请直接从可用字里选字输出' }
+            { role: 'user', content: '不能输出空内容，请直接从可用字里选字输出。直接输出结果和评分，不要任何解释' }
+          );
+          continue;
+        }
+
+        // 检查0：重复输出检测（模型固执重复时直接要求换新）
+        const isDuplicate = attemptedOutputs.some((prev) => prev === text);
+        attemptedOutputs.push(text);
+        if (isDuplicate) {
+          log(`[${requestId}] 检查0 - 重复输出: ❌ 与之前相同`);
+          messages.push(
+            { role: 'assistant', content: text },
+            { role: 'user', content: `“${text}”这个内容已经试过了不能通过，请从可用字里换一组完全不同的字，组合成一个新的简单通顺的词或短句。直接输出结果和评分，不要解释、道歉或任何多余文字` }
           );
           continue;
         }
@@ -182,7 +204,7 @@ export async function POST(req: Request) {
           // 回传：告诉模型输出包含敏感内容
           messages.push(
             { role: 'assistant', content: text },
-            { role: 'user', content: '输出中包含不适合儿童的内容，请重新输出一个积极健康的' }
+            { role: 'user', content: '输出中包含不适合儿童的内容，请重新输出一个积极健康的。直接输出结果和评分，不要任何解释' }
           );
           continue;
         }
@@ -197,10 +219,10 @@ export async function POST(req: Request) {
         const extraChars = findExtraChars(textBody, allowedSet);
         log(`[${requestId}] 检查2 - 越界字: ${extraChars.length > 0 ? `❌ 发现 ${extraChars}: ${JSON.stringify(extraChars)}` : '✅ 通过'}`);
         if (extraChars.length > 0) {
-          // 回传：列出哪些字越界了
+          // 回传：列出越界字 + 明确可用字，并要求换新、禁止解释
           messages.push(
             { role: 'assistant', content: text },
-            { role: 'user', content: `"${extraChars.join('')}" 这些字不可以使用，只能从给定的字里选` }
+            { role: 'user', content: `“${extraChars.join('')}”这些字不在可用字里，绝对不允许使用。可用字只有：${sortedCharsStr}。请从这些字里重新选一组完全不同的字，组合成一个简单通顺的词或短句。直接输出结果和评分，不要解释、道歉或任何多余文字` }
           );
           continue;
         }
@@ -209,10 +231,10 @@ export async function POST(req: Request) {
         const usedChars = findUsedChars(textBody, allowedSet);
         log(`[${requestId}] 检查3 - 最少字数: ${usedChars.length < MIN_USED_CHARS ? `❌ 只用 ${usedChars.length} 个字` : `✅ 通过 (${usedChars.length}个)`}`);
         if (usedChars.length < MIN_USED_CHARS) {
-          // 回传：至少用 MIN_USED_CHARS 个字
+          // 回传：至少用 MIN_USED_CHARS 个字，并换新
           messages.push(
             { role: 'assistant', content: text },
-            { role: 'user', content: `至少使用 ${MIN_USED_CHARS} 个字，请重新输出` }
+            { role: 'user', content: `至少使用 ${MIN_USED_CHARS} 个可用字，请换一组字重新输出。直接输出结果和评分，不要任何解释` }
           );
           continue;
         }
@@ -299,7 +321,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 全部重试失败，降级到保底句
+    // 全部重试失败，降级到保底句（优先与字库相关的句子）
     log(`[${requestId}] ⚠️ ${MAX_RETRIES} 次重试均失败，降级到保底句`);
     const fallbackText = getFallbackSentence();
     const fallbackUsedChars = pickFallbackUsedChars(fallbackText, allowedSet);
