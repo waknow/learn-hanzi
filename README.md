@@ -207,6 +207,14 @@ npm run lint         # 代码检查
 2. 最近的 git tag（如 `v1.0.0` → 版本 `1.0.0`）
 3. `package.json` 的 `version` 字段
 
+**一致性校验**：当版本自动取自 git tag 时，构建前会校验当前 `HEAD` 与 tag 指向的 commit
+是否一致。若打 tag 之后又有新提交，构建会被拒绝并提示：
+
+- 先为当前代码打新 tag：`bash scripts/tag.sh`（推荐）
+- 或显式指定版本构建：`bash scripts/build.sh hanzi-learn <版本号>`
+- 或强制构建（版本自动附加 commit 距离，如 `1.0.0-1-g779accd`，保证版本↔commit 唯一对应）：
+  `ALLOW_DIRTY=1 bash scripts/build.sh`
+
 版本信息会体现在三个地方：
 
 | 位置 | 形式 |

@@ -32,6 +32,18 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
   exit 1
 fi
 
+# 检查工作区是否有未提交改动（避免 tag 与实际代码脱节）
+DIRTY="$(git status --porcelain)"
+if [ -n "$DIRTY" ]; then
+  echo "⚠ 工作区存在未提交的改动："
+  echo "$DIRTY" | head -10
+  read -r -p "继续打 tag 吗？未提交的改动不会包含在 $TAG 中。 [y/N] " ANS
+  if [[ ! "$ANS" =~ ^[Yy]$ ]]; then
+    echo "已取消，请先提交代码。"
+    exit 1
+  fi
+fi
+
 # 同步 package.json 版本（如不一致）
 PKG_VERSION="$(node -p "require('./package.json').version")"
 if [ "$PKG_VERSION" != "$VERSION" ]; then
