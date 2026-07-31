@@ -10,7 +10,16 @@ import { syncOnce } from '@/lib/stateSync';
  */
 export default function StateSync() {
   useEffect(() => {
-    void syncOnce();
+    let cancelled = false;
+    void syncOnce().then(() => {
+      // 同步完成后广播事件，让依赖配置的页面（如字库选择）刷新
+      if (!cancelled && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('hanzi-state-synced'));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   return null;
 }

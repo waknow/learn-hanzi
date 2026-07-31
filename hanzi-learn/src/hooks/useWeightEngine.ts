@@ -21,9 +21,11 @@ export function useWeightEngine(bankId: string, bankChars: string[]) {
     const bankData = allData[bankId];
 
     if (bankData) {
-      // 检查字库是否变化（字数不同则重新初始化）
-      if (bankData.chars.length !== bankChars.length) {
-        console.log(`[weightEngine] 字库 ${bankId} 已变化: ${bankData.chars.length} → ${bankChars.length}，重新初始化`);
+      // 检查字库是否变化：按字符内容比较（仅比长度会漏掉“字数相同但字不同”的修改）
+      const currentChars = bankData.chars.map((c) => c.char).join('');
+      const expectedChars = bankChars.join('');
+      if (currentChars !== expectedChars) {
+        console.log(`[weightEngine] 字库 ${bankId} 内容已变化，重新初始化`);
         const fresh = {
           round: 0,
           chars: initCharEntries(bankChars),

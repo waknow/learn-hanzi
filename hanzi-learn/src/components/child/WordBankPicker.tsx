@@ -40,21 +40,28 @@ export default function WordBankPicker() {
   const [banks, setBanks] = useState<WordBank[]>([]);
 
   useEffect(() => {
-    const config = loadConfig();
-    const enabledIds = config.enabledBanks;
+    const load = () => {
+      const config = loadConfig();
+      const enabledIds = config.enabledBanks;
 
-    // 合并内置字库和自定义字库
-    // 如果开启了全部（enabledBanks 为空数组），则显示全部
-    const allBanks =
-      enabledIds.length === 0
-        ? BUILT_IN_BANKS
-        : BUILT_IN_BANKS.filter((b) => enabledIds.includes(b.id));
+      // 合并内置字库和自定义字库
+      // 如果开启了全部（enabledBanks 为空数组），则显示全部
+      const allBanks =
+        enabledIds.length === 0
+          ? BUILT_IN_BANKS
+          : BUILT_IN_BANKS.filter((b) => enabledIds.includes(b.id));
 
-    const customs = (config.customBanks || []).filter((b) =>
-      enabledIds.length === 0 ? true : enabledIds.includes(b.id)
-    );
+      const customs = (config.customBanks || []).filter((b) =>
+        enabledIds.length === 0 ? true : enabledIds.includes(b.id)
+      );
 
-    setBanks([...allBanks, ...customs]);
+      setBanks([...allBanks, ...customs]);
+    };
+
+    load();
+    // 服务端同步完成后刷新（跨设备修改字库后立即生效）
+    window.addEventListener('hanzi-state-synced', load);
+    return () => window.removeEventListener('hanzi-state-synced', load);
   }, []);
 
   const handleSelect = (bankId: string) => {

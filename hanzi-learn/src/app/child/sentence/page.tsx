@@ -8,6 +8,8 @@ import LoadingState from '@/components/child/LoadingState';
 import ResultState from '@/components/child/ResultState';
 import BackButton from '@/components/child/BackButton';
 import { findBankById, getMergedBankChars } from '@/lib/wordBanks';
+import { loadConfig } from '@/lib/storage';
+import type { WordBank } from '@/lib/types';
 import { useWeightEngine } from '@/hooks/useWeightEngine';
 import { useSound } from '@/hooks/useSound';
 import { useStats } from '@/hooks/useStats';
@@ -41,9 +43,13 @@ function SentencePage() {
   const searchParams = useSearchParams();
   const bankId = searchParams.get('bank') || '';
   const isComprehensive = bankId === 'comprehensive';
-  const bank = isComprehensive
-    ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
-    : findBankById(bankId);
+
+  // 字库解析：综合字库 / 内置字库优先；内置找不到时（自定义字库）在 effect 中补查
+  const [bank, setBank] = useState<WordBank | undefined>(() =>
+    isComprehensive
+      ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
+      : findBankById(bankId)
+  );
 
   const { play } = useSound();
   const { recordCall } = useStats();
@@ -60,12 +66,16 @@ function SentencePage() {
   const chars = bank?.chars || [];
   const weightEngine = useWeightEngine(bankId, chars);
 
-  // 无效字库
+  // 解析字库：内置找不到时查自定义字库；都没有则跳回选择页
   useEffect(() => {
-    if (!bank) {
+    if (isComprehensive || bank) return;
+    const custom = (loadConfig().customBanks || []).find((b) => b.id === bankId);
+    if (custom) {
+      setBank(custom);
+    } else {
       router.push('/child');
     }
-  }, [bank, router]);
+  }, [isComprehensive, bank, bankId, router]);
 
   // 客户端日志
   function clientLog(...args: unknown[]) {
