@@ -31,12 +31,12 @@ describe("useWeightEngine", () => {
     expect([...sorted].sort()).toEqual(["小", "大", "猫"].sort());
   });
 
-  it("update 更新权重：用到的字归 1，未用到的 +1", () => {
+  it("update 更新权重：用到的字归 0，未用到的 +1", () => {
     const { result } = renderHook(() => useWeightEngine("level1", ["小", "大"]));
     result.current.getWeightData(); // 先触发初始化，否则 update 内 bankData 不存在会静默返回
     act(() => result.current.update(new Set(["小"])));
     const weights = result.current.getWeights();
-    expect(weights.find((w) => w.char === "小")?.weight).toBe(1);
+    expect(weights.find((w) => w.char === "小")?.weight).toBe(0);
     expect(weights.find((w) => w.char === "大")?.weight).toBe(2);
   });
 
@@ -58,7 +58,7 @@ describe("useWeightEngine", () => {
     );
     result.current.getWeightData(); // 先初始化 bankData，走 update 生效路径
     act(() => result.current.update(new Set(["小"])));
-    // 此时权重应为：小=1（被用）、大=2（未用）
+    // 此时权重应为：小=0（被用）、大=2（未用）
     expect(result.current.getWeights().find((w) => w.char === "大")?.weight).toBe(2);
     rerender({ chars: ["小", "猫"] });
     // 字库内容变化（大→猫）→ getWeightData 检测到 currentChars !== expectedChars，重新初始化

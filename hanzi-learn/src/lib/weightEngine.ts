@@ -40,7 +40,7 @@ export function logWeightState(chars: CharEntry[], label: string) {
   console.log(`[weightEngine] ${label}:`, sorted.map((c) => `${c.char}:${c.weight}`).join(", "));
 }
 
-/** 权重上限 */
+/** 直示阈值：超过该权重的字触发单字直示 */
 export const MAX_WEIGHT = 20;
 
 /** 初始权重（每个汉字从 1 开始） */
@@ -50,8 +50,8 @@ export const INITIAL_WEIGHT = 1;
  * 更新权重
  *
  * 规则:
- * - 本轮被用到的字 → weight 重置为 1
- * - 本轮未用到的字 → weight +1（上限 MAX_WEIGHT）
+ * - 本轮被用到的字 → weight 重置为 0（命中）
+ * - 本轮未用到的字 → weight +1（无上限）
  */
 export function updateWeights(
   chars: CharEntry[],
@@ -62,14 +62,14 @@ export function updateWeights(
     if (usedSet.has(c.char)) {
       return {
         ...c,
-        weight: INITIAL_WEIGHT,
+        weight: 0, // 命中 → 归 0
         totalUsed: c.totalUsed + 1,
         lastUsedRound: round,
       };
     } else {
       return {
         ...c,
-        weight: Math.min(c.weight + 1, MAX_WEIGHT),
+        weight: c.weight + 1, // 未命中 → +1，无上限
       };
     }
   });
