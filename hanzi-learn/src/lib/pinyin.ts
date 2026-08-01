@@ -9,6 +9,7 @@ export const PINYIN_MAP: Record<string, string> = {
   // B
   八: "bā",
   巴: "bā",
+  爸: "bà",
   白: "bái",
   百: "bǎi",
   半: "bàn",
@@ -38,12 +39,14 @@ export const PINYIN_MAP: Record<string, string> = {
   地: "dì",
   弟: "dì",
   点: "diǎn",
+  电: "diàn",
   冬: "dōng",
   都: "dōu",
   读: "dú",
   多: "duō",
   // E
   儿: "ér",
+  二: "èr",
   耳: "ěr",
   // F
   发: "fà",
@@ -52,8 +55,10 @@ export const PINYIN_MAP: Record<string, string> = {
   风: "fēng",
   父: "fù",
   // G
+  干: "gān",
   哥: "gē",
   个: "gè",
+  根: "gēn",
   狗: "gǒu",
   果: "guǒ",
   // H
@@ -67,6 +72,7 @@ export const PINYIN_MAP: Record<string, string> = {
   花: "huā",
   画: "huà",
   黄: "huáng",
+  会: "huì",
   火: "huǒ",
   // J
   鸡: "jī",
@@ -75,6 +81,7 @@ export const PINYIN_MAP: Record<string, string> = {
   姐: "jiě",
   进: "jìn",
   就: "jiù",
+  九: "jiǔ",
   己: "jǐ",
   // K
   开: "kāi",
@@ -91,6 +98,7 @@ export const PINYIN_MAP: Record<string, string> = {
   里: "lǐ",
   凉: "liáng",
   林: "lín",
+  六: "liù",
   绿: "lǜ",
   // M
   马: "mǎ",
@@ -110,10 +118,13 @@ export const PINYIN_MAP: Record<string, string> = {
   跑: "pǎo",
   拍: "pāi",
   朋: "péng",
+  皮: "pí",
   // Q
   千: "qiān",
   前: "qián",
   起: "qǐ",
+  七: "qī",
+  桥: "qiáo",
   秋: "qiū",
   去: "qù",
   // R
@@ -123,16 +134,21 @@ export const PINYIN_MAP: Record<string, string> = {
   热: "rè",
   // S
   三: "sān",
+  伞: "sǎn",
+  森: "sēn",
   山: "shān",
+  闪: "shǎn",
   上: "shàng",
   少: "shǎo",
   声: "shēng",
   师: "shī",
   十: "shí",
+  是: "shì",
   手: "shǒu",
   书: "shū",
   树: "shù",
   水: "shuǐ",
+  睡: "shuì",
   说: "shuō",
   四: "sì",
   霜: "shuāng",
@@ -148,6 +164,7 @@ export const PINYIN_MAP: Record<string, string> = {
   听: "tīng",
   同: "tóng",
   头: "tóu",
+  土: "tǔ",
   兔: "tù",
   // W
   外: "wài",
@@ -165,6 +182,7 @@ export const PINYIN_MAP: Record<string, string> = {
   小: "xiǎo",
   写: "xiě",
   星: "xīng",
+  学: "xué",
   雪: "xuě",
   // Y
   眼: "yǎn",
@@ -176,6 +194,7 @@ export const PINYIN_MAP: Record<string, string> = {
   以: "yǐ",
   音: "yīn",
   有: "yǒu",
+  友: "yǒu",
   游: "yóu",
   鱼: "yú",
   雨: "yǔ",
@@ -183,6 +202,7 @@ export const PINYIN_MAP: Record<string, string> = {
   云: "yún",
   爷: "yé",
   园: "yuán",
+  圆: "yuán",
   // Z
   在: "zài",
   走: "zǒu",
@@ -192,6 +212,8 @@ export const PINYIN_MAP: Record<string, string> = {
   桌: "zhuō",
   纸: "zhǐ",
   只: "zhǐ",
+  枝: "zhī",
+  着: "zhe",
   真: "zhēn",
 };
 
