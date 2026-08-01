@@ -4,3 +4,6 @@ hanzi-learn/env
 
 # git worktrees
 .worktrees/
+
+# agent
+/.pi-subagents
