@@ -58,6 +58,7 @@ function SentencePage() {
   const [sentence, setSentence] = useState("");
   const [usedChars, setUsedChars] = useState<string[]>([]);
   const [isFallback, setIsFallback] = useState(false);
+  const [isDirectShow, setIsDirectShow] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   // 当前会话连续生成计数
   const [consecutiveCount, setConsecutiveCount] = useState(0);
@@ -108,6 +109,25 @@ function SentencePage() {
     const extra = weightData.chars.filter((c) => !chars.includes(c.char)).map((c) => c.char);
     if (missing.length > 0) clientLog("⚠️ 权重中缺少的字:", missing);
     if (extra.length > 0) clientLog("⚠️ 权重中多余的字:", extra);
+
+    // 直示检查：存在超过阈值的字 → 跳过 API，直接展示单字
+    const directChar = weightEngine.getDirectShowChar();
+    if (directChar) {
+      clientLog(`🌟 单字直示: "${directChar}"`);
+      play("success");
+      setSentence(directChar);
+      setUsedChars([directChar]);
+      setIsFallback(false);
+      setIsDirectShow(true);
+      weightEngine.update(new Set([directChar]));
+      weightEngine.markDirectShown();
+      recordCall(directChar, bankId, [directChar]);
+      setConsecutiveCount((c) => c + 1);
+      const afterWeight = weightEngine.getWeightData();
+      clientLog("更新后权重:", afterWeight.chars.map((c) => `${c.char}:${c.weight}`).join(", "));
+      setState("result");
+      return;
+    }
 
     const sortedChars = weightEngine.getSortedChars();
     const themeWeights = JSON.stringify(
@@ -205,6 +225,7 @@ function SentencePage() {
     setSentence("");
     setUsedChars([]);
     setIsFallback(false);
+    setIsDirectShow(false);
     setErrorMsg("");
     setState("loading");
     handleGenerate();
@@ -236,6 +257,7 @@ function SentencePage() {
             text={sentence}
             usedChars={usedChars}
             isFallback={isFallback}
+            isDirectShow={isDirectShow}
             consecutiveCount={consecutiveCount}
             onRegenerate={handleRegenerate}
           />
