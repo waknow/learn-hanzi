@@ -12,7 +12,10 @@
   "overrides": [
     {
       "files": ["src/**/*.test.{ts,tsx}", "src/test/**/*.{ts,tsx}"],
-      "extends": ["plugin:testing-library/react"]
+      "extends": ["plugin:testing-library/react"],
+      "rules": {
+        "testing-library/no-manual-cleanup": "off"
+      }
     }
   ]
 }
