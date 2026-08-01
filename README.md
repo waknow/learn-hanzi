@@ -20,6 +20,19 @@ npm run dev
 
 打开 http://localhost:3000 即可使用。
 
+## 开发与质量检查
+
+```bash
+npm run check        # 类型检查 + Lint + 测试（含覆盖率门槛）一键全绿
+npm run test         # 运行测试（含覆盖率报告，不达标即失败）
+npm run test:watch   # 测试监听模式
+npm run lint         # ESLint 检查
+npm run typecheck    # TypeScript 类型检查
+```
+
+测试文件与源码同目录（`*.test.ts(x)`），使用 Vitest + Testing Library；
+覆盖率门槛：全项目 ≥60%，核心逻辑库（src/lib）≥80%。
+
 ## 核心功能
 
 ### 👶 小朋友界面
