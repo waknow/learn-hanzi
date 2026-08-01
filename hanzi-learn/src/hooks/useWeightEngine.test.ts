@@ -1,0 +1,62 @@
+/**
+ * 权重引擎 Hook 测试
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { useWeightEngine } from "./useWeightEngine";
+import { loadWeightData } from "@/lib/storage";
+
+describe("useWeightEngine", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("首次使用时初始化字库并持久化", () => {
+    const { result } = renderHook(() => useWeightEngine("level1", ["小", "大"]));
+    // useWeightEngine 无挂载副作用，首次调用 getWeightData() 时才初始化并落库
+    expect(result.current.getWeightData().chars).toHaveLength(2);
+    const data = loadWeightData();
+    expect(data["level1"]).toBeDefined();
+    expect(data["level1"].round).toBe(0);
+  });
+
+  it("getSortedChars 返回所有字（排列）", () => {
+    const { result } = renderHook(() => useWeightEngine("level1", ["小", "大", "猫"]));
+    const sorted = result.current.getSortedChars();
+    expect([...sorted].sort()).toEqual(["小", "大", "猫"].sort());
+  });
+
+  it("update 更新权重：用到的字归 1，未用到的 +1", () => {
+    const { result } = renderHook(() => useWeightEngine("level1", ["小", "大"]));
+    result.current.getWeightData(); // 先触发初始化，否则 update 内 bankData 不存在会静默返回
+    act(() => result.current.update(new Set(["小"])));
+    const weights = result.current.getWeights();
+    expect(weights.find((w) => w.char === "小")?.weight).toBe(1);
+    expect(weights.find((w) => w.char === "大")?.weight).toBe(2);
+  });
+
+  it("reset 重置为初始状态", () => {
+    const { result } = renderHook(() => useWeightEngine("level1", ["小", "大"]));
+    act(() => result.current.update(new Set(["小"])));
+    act(() => result.current.reset());
+    const weights = result.current.getWeights();
+    expect(weights.every((w) => w.weight === 1)).toBe(true);
+  });
+
+  it("字库内容变化后自动重新初始化", () => {
+    const { result, rerender } = renderHook(
+      ({ chars }: { chars: string[] }) => useWeightEngine("level1", chars),
+      { initialProps: { chars: ["小", "大"] } },
+    );
+    act(() => result.current.update(new Set(["小"])));
+    rerender({ chars: ["小", "猫"] });
+    const weights = result.current.getWeights();
+    expect(weights.map((w) => w.char).sort()).toEqual(["小", "猫"].sort());
+    expect(weights.every((w) => w.weight === 1)).toBe(true);
+  });
+});
