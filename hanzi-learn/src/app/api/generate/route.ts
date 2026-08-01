@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { findExtraChars, findUsedChars, hasSensitiveContent } from "@/lib/validator";
-import { getFallbackSentence, pickFallbackUsedChars } from "@/lib/fallbackSentences";
 import { readState } from "@/lib/server/stateStore";
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
@@ -54,6 +53,25 @@ function getRecentShown(bankId: string): string[] {
     // 读取失败忽略，仅用内存历史
   }
   return result.slice(0, RECENT_LIMIT);
+}
+
+/** 降级兜底：从权重列表挑权重最大的字；无权重信息时取 sortedChars 第一个字 */
+function pickFallbackChar(themeWeights?: string, sortedChars?: string): string {
+  if (themeWeights) {
+    try {
+      const arr: { char: string; weight: number }[] = JSON.parse(themeWeights);
+      if (arr.length > 0) {
+        let best = arr[0];
+        for (const item of arr) {
+          if (item.weight > best.weight) best = item;
+        }
+        if (best.char) return best.char;
+      }
+    } catch {
+      // themeWeights 解析失败，走 sortedChars 兜底
+    }
+  }
+  return (sortedChars ?? "")[0] ?? "";
 }
 
 /** 带时间戳的日志 */
@@ -160,14 +178,14 @@ export async function POST(req: Request) {
     });
 
     if (!apiKey || apiKey === "your_deepseek_api_key_here") {
-      log(`[${requestId}] ⚠️ 无有效 API Key，使用保底句`);
-      const text = getFallbackSentence();
-      const usedChars = pickFallbackUsedChars(text, allowedSet);
-      recordShown(bankId, text);
-      log(`[${requestId}] ✅ 保底句: "${text}", 用字:`, usedChars);
+      log(`[${requestId}] ⚠️ 无有效 API Key，直示权重最大单字`);
+      const fallbackText = pickFallbackChar(themeWeights, sortedCharsStr);
+      const fallbackUsedChars = fallbackText ? [fallbackText] : [];
+      recordShown(bankId, fallbackText);
+      log(`[${requestId}] ✅ 单字直示: "${fallbackText}"`);
       return NextResponse.json({
-        text,
-        usedChars,
+        text: fallbackText,
+        usedChars: fallbackUsedChars,
         extraChars: [],
         isFallback: true,
       });
@@ -419,12 +437,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // 全部重试失败，降级到保底句（优先与字库相关的句子）
-    log(`[${requestId}] ⚠️ ${MAX_RETRIES} 次重试均失败，降级到保底句`);
-    const fallbackText = getFallbackSentence();
-    const fallbackUsedChars = pickFallbackUsedChars(fallbackText, allowedSet);
+    // 全部重试失败，直示权重最大单字
+    log(`[${requestId}] ⚠️ ${MAX_RETRIES} 次重试均失败，直示权重最大单字`);
+    const fallbackText = pickFallbackChar(themeWeights, sortedCharsStr);
+    const fallbackUsedChars = fallbackText ? [fallbackText] : [];
     recordShown(bankId, fallbackText);
-    log(`[${requestId}] ✅ 保底句: "${fallbackText}", 用字:`, fallbackUsedChars);
+    log(`[${requestId}] ✅ 单字直示: "${fallbackText}", 用字:`, fallbackUsedChars);
     return NextResponse.json({
       text: fallbackText,
       usedChars: fallbackUsedChars,
