@@ -21,6 +21,8 @@ export interface WeightData {
   [bankId: string]: {
     round: number;
     chars: CharEntry[];
+    /** 最近一次单字直示的轮次（节流用）；未直示过则缺省 */
+    lastDirectShowRound?: number;
   };
 }
 

@@ -67,3 +67,56 @@ describe("useWeightEngine", () => {
     expect(weights.every((w) => w.weight === 1)).toBe(true);
   });
 });
+
+describe("getDirectShowChar 直示节流", () => {
+  const bankData = (round: number, weights: number[], last?: number) => ({
+    level1: {
+      round,
+      chars: ["大", "小"].map((char, i) => ({
+        char,
+        weight: weights[i],
+        totalUsed: 0,
+        lastUsedRound: 0,
+      })),
+      lastDirectShowRound: last,
+    },
+  });
+
+  it("存在超过阈值的字时返回权重最大的字", () => {
+    localStorage.setItem("hanzi_weight_data", JSON.stringify(bankData(10, [25, 5], 0)));
+    const { result } = renderHook(() => useWeightEngine("level1", ["大", "小"]));
+    expect(result.current.getDirectShowChar()).toBe("大");
+  });
+
+  it("无超阈值字时返回 null", () => {
+    localStorage.setItem("hanzi_weight_data", JSON.stringify(bankData(10, [20, 5], 0)));
+    const { result } = renderHook(() => useWeightEngine("level1", ["大", "小"]));
+    expect(result.current.getDirectShowChar()).toBeNull();
+  });
+
+  it("节流：距上次直示不足 3 轮时返回 null", () => {
+    localStorage.setItem("hanzi_weight_data", JSON.stringify(bankData(10, [25, 5], 8)));
+    const { result } = renderHook(() => useWeightEngine("level1", ["大", "小"]));
+    expect(result.current.getDirectShowChar()).toBeNull();
+  });
+
+  it("节流：距上次直示满 3 轮后恢复直示", () => {
+    localStorage.setItem("hanzi_weight_data", JSON.stringify(bankData(10, [25, 5], 7)));
+    const { result } = renderHook(() => useWeightEngine("level1", ["大", "小"]));
+    expect(result.current.getDirectShowChar()).toBe("大");
+  });
+
+  it("markDirectShown 持久化当前轮次", () => {
+    localStorage.setItem("hanzi_weight_data", JSON.stringify(bankData(10, [25, 5], 0)));
+    const { result } = renderHook(() => useWeightEngine("level1", ["大", "小"]));
+    act(() => result.current.markDirectShown());
+    const data = loadWeightData();
+    expect(data["level1"].lastDirectShowRound).toBe(10);
+  });
+
+  it("从未直示过（字段缺省）且超阈值 → 允许直示", () => {
+    localStorage.setItem("hanzi_weight_data", JSON.stringify(bankData(10, [25, 5])));
+    const { result } = renderHook(() => useWeightEngine("level1", ["大", "小"]));
+    expect(result.current.getDirectShowChar()).toBe("大");
+  });
+});
