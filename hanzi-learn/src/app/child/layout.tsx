@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
 /** 儿童区布局 */
 export default function ChildLayout({ children }: { children: ReactNode }) {

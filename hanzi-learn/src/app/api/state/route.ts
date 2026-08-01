@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
-import { readState, writeState } from '@/lib/server/stateStore';
+import { NextResponse } from "next/server";
+import { readState, writeState } from "@/lib/server/stateStore";
 
 // 强制动态执行，避免 GET 被静态缓存导致读不到最新数据
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/state
@@ -32,8 +32,8 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: true, updatedAt: state.updatedAt });
   } catch (err) {
     return NextResponse.json(
-      { ok: false, error: 'invalid_body', message: '请求体格式不正确' },
-      { status: 400 }
+      { ok: false, error: "invalid_body", message: "请求体格式不正确" },
+      { status: 400 },
     );
   }
 }

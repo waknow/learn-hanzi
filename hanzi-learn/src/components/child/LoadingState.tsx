@@ -1,18 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import ParticleBg from '@/components/shared/ParticleBg';
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import ParticleBg from "@/components/shared/ParticleBg";
 
 interface LoadingStateProps {
   onTimeout: () => void;
 }
 
-const MESSAGES = [
-  '小脑袋正在想…',
-  '快要变出句子啦…',
-  '马上就好…',
-];
+const MESSAGES = ["小脑袋正在想…", "快要变出句子啦…", "马上就好…"];
 
 /** 文案轮换间隔 */
 const MSG_INTERVAL = 3000;
@@ -55,8 +51,8 @@ export default function LoadingState({ onTimeout }: LoadingStateProps) {
           rotate: [0, -5, 5, 0],
         }}
         transition={{
-          y: { duration: 1.5, repeat: Infinity, ease: 'easeInOut' },
-          rotate: { duration: 3, repeat: Infinity, ease: 'easeInOut' },
+          y: { duration: 1.5, repeat: Infinity, ease: "easeInOut" },
+          rotate: { duration: 3, repeat: Infinity, ease: "easeInOut" },
         }}
       >
         🚀

@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { BUILT_IN_BANKS } from '@/lib/wordBanks';
-import { loadConfig, saveConfig, saveWeightData, loadWeightData, saveStats } from '@/lib/storage';
-import type { ParentConfig, WordBank } from '@/lib/types';
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { BUILT_IN_BANKS } from "@/lib/wordBanks";
+import { loadConfig, saveConfig, saveWeightData, loadWeightData, saveStats } from "@/lib/storage";
+import type { ParentConfig, WordBank } from "@/lib/types";
 
 /** 设置管理页 */
 export default function SettingsPage() {
@@ -13,13 +13,13 @@ export default function SettingsPage() {
   const [config, setConfig] = useState<ParentConfig | null>(null);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [editBank, setEditBank] = useState<WordBank | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editEmoji, setEditEmoji] = useState('');
-  const [editChars, setEditChars] = useState('');
+  const [editName, setEditName] = useState("");
+  const [editEmoji, setEditEmoji] = useState("");
+  const [editChars, setEditChars] = useState("");
   const [passwordModal, setPasswordModal] = useState(false);
-  const [oldPwd, setOldPwd] = useState('');
-  const [newPwd, setNewPwd] = useState('');
-  const [confirmPwd, setConfirmPwd] = useState('');
+  const [oldPwd, setOldPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
 
   useEffect(() => {
     setConfig(loadConfig());
@@ -45,24 +45,24 @@ export default function SettingsPage() {
 
   // 重置权重
   const resetWeights = () => {
-    if (!confirm('确定要重置所有字的权重吗？')) return;
+    if (!confirm("确定要重置所有字的权重吗？")) return;
     saveWeightData({});
-    alert('权重已重置');
+    alert("权重已重置");
   };
 
   // 清除学习记录
   const clearStats = () => {
-    if (!confirm('确定要清除所有学习记录吗？此操作不可恢复！')) return;
+    if (!confirm("确定要清除所有学习记录吗？此操作不可恢复！")) return;
     saveStats({
       totalCalls: 0,
       todayCalls: 0,
-      todayDate: '',
+      todayDate: "",
       weeklyCalls: 0,
       history: {},
       sentenceHistory: [],
       charUsage: {},
     });
-    alert('学习记录已清除');
+    alert("学习记录已清除");
   };
 
   // 打开自定义字库编辑
@@ -71,12 +71,12 @@ export default function SettingsPage() {
       setEditBank(bank);
       setEditName(bank.name);
       setEditEmoji(bank.emoji);
-      setEditChars(bank.chars.join(''));
+      setEditChars(bank.chars.join(""));
     } else {
       setEditBank(null);
-      setEditName('');
-      setEditEmoji('📦');
-      setEditChars('');
+      setEditName("");
+      setEditEmoji("📦");
+      setEditChars("");
     }
     setShowCustomEditor(true);
   };
@@ -84,12 +84,12 @@ export default function SettingsPage() {
   // 保存自定义字库
   const saveCustom = () => {
     if (!editName || !editChars) {
-      alert('请输入字库名称和汉字');
+      alert("请输入字库名称和汉字");
       return;
     }
-    const chars = Array.from(new Set(editChars.split('').filter((c) => /[\u4e00-\u9fff]/.test(c))));
+    const chars = Array.from(new Set(editChars.split("").filter((c) => /[\u4e00-\u9fff]/.test(c))));
     if (chars.length < 2) {
-      alert('至少需要 2 个汉字');
+      alert("至少需要 2 个汉字");
       return;
     }
 
@@ -117,7 +117,7 @@ export default function SettingsPage() {
 
   // 删除自定义字库
   const deleteCustom = (id: string) => {
-    if (!confirm('确定要删除这个自定义字库吗？')) return;
+    if (!confirm("确定要删除这个自定义字库吗？")) return;
     config.customBanks = config.customBanks.filter((b) => b.id !== id);
     saveConfig(config);
     refresh();
@@ -126,24 +126,24 @@ export default function SettingsPage() {
   // 修改密码
   const changePassword = () => {
     if (oldPwd !== config.password) {
-      alert('旧密码错误');
+      alert("旧密码错误");
       return;
     }
     if (newPwd.length !== 4 || confirmPwd.length !== 4) {
-      alert('密码必须是 4 位数字');
+      alert("密码必须是 4 位数字");
       return;
     }
     if (newPwd !== confirmPwd) {
-      alert('两次密码不一致');
+      alert("两次密码不一致");
       return;
     }
     config.password = newPwd;
     saveConfig(config);
     setPasswordModal(false);
-    setOldPwd('');
-    setNewPwd('');
-    setConfirmPwd('');
-    alert('密码已修改');
+    setOldPwd("");
+    setNewPwd("");
+    setConfirmPwd("");
+    alert("密码已修改");
   };
 
   const allEnabled = config.enabledBanks.length === 0;
@@ -152,7 +152,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-gradient-to-b from-candy-purple/10 to-candy-sky/10 p-6 pb-32">
       {/* 顶部导航 */}
       <div className="flex items-center justify-between mb-8">
-        <button onClick={() => router.push('/parent/dashboard')} className="text-gray-400 text-lg">
+        <button onClick={() => router.push("/parent/dashboard")} className="text-gray-400 text-lg">
           ← 统计
         </button>
         <h1 className="text-2xl font-cartoon text-gray-700">⚙️ 字库管理</h1>
@@ -160,13 +160,9 @@ export default function SettingsPage() {
       </div>
 
       {/* 已启用 */}
-      <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="mb-6"
-      >
+      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mb-6">
         <h2 className="text-gray-500 font-cartoon mb-3">
-          {allEnabled ? '全部已启用' : '已启用字库'}
+          {allEnabled ? "全部已启用" : "已启用字库"}
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {BUILT_IN_BANKS.filter((b) => allEnabled || config.enabledBanks.includes(b.id)).map(
@@ -177,7 +173,7 @@ export default function SettingsPage() {
                 enabled={true}
                 onToggle={() => toggleBank(bank.id)}
               />
-            )
+            ),
           )}
           {config.customBanks
             .filter((b) => allEnabled || config.enabledBanks.includes(b.id))
@@ -289,7 +285,7 @@ export default function SettingsPage() {
             className="bg-white rounded-4xl p-6 w-full max-w-md shadow-2xl"
           >
             <h3 className="text-xl font-cartoon text-gray-700 mb-4">
-              {editBank ? '编辑字库' : '新增字库'}
+              {editBank ? "编辑字库" : "新增字库"}
             </h3>
 
             <div className="space-y-4">
@@ -357,7 +353,7 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <input
                 value={oldPwd}
-                onChange={(e) => setOldPwd(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onChange={(e) => setOldPwd(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 className="w-full px-4 py-3 rounded-2xl bg-gray-50 text-gray-700 text-lg text-center"
                 placeholder="旧密码（4位数字）"
                 type="password"
@@ -366,7 +362,7 @@ export default function SettingsPage() {
               />
               <input
                 value={newPwd}
-                onChange={(e) => setNewPwd(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onChange={(e) => setNewPwd(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 className="w-full px-4 py-3 rounded-2xl bg-gray-50 text-gray-700 text-lg text-center"
                 placeholder="新密码（4位数字）"
                 type="password"
@@ -375,7 +371,7 @@ export default function SettingsPage() {
               />
               <input
                 value={confirmPwd}
-                onChange={(e) => setConfirmPwd(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onChange={(e) => setConfirmPwd(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 className="w-full px-4 py-3 rounded-2xl bg-gray-50 text-gray-700 text-lg text-center"
                 placeholder="确认新密码"
                 type="password"
@@ -424,15 +420,15 @@ function BankToggleCard({
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       className={`rounded-2xl p-4 text-center relative ${
-        enabled ? 'bg-white shadow-sm' : 'bg-gray-50 opacity-50'
+        enabled ? "bg-white shadow-sm" : "bg-gray-50 opacity-50"
       }`}
     >
       <button onClick={onToggle} className="w-full">
         <div className="text-2xl mb-1">{bank.emoji}</div>
         <div className="text-sm font-cartoon text-gray-600">{bank.name}</div>
         <div className="text-xs text-gray-300 mt-1">{bank.chars.length}字</div>
-        <div className={`mt-2 text-xs ${enabled ? 'text-candy-green' : 'text-gray-300'}`}>
-          {enabled ? '✅ 已启用' : '❌ 已禁用'}
+        <div className={`mt-2 text-xs ${enabled ? "text-candy-green" : "text-gray-300"}`}>
+          {enabled ? "✅ 已启用" : "❌ 已禁用"}
         </div>
       </button>
 

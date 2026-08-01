@@ -16,14 +16,14 @@ import {
   saveStats,
   loadConfig,
   saveConfig,
-} from './storage';
-import type { WeightData, StudyStats, ParentConfig } from './types';
+} from "./storage";
+import type { WeightData, StudyStats, ParentConfig } from "./types";
 
 /** 已与服务器完成过同步的标记（避免重复执行首次迁移） */
-const SYNCED_FLAG = 'hanzi_state_synced';
+const SYNCED_FLAG = "hanzi_state_synced";
 
 function hasLocalData(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
   try {
     return (
       localStorage.getItem(KEYS.WEIGHT_DATA) !== null ||
@@ -43,10 +43,10 @@ function isNonEmpty(obj: object | undefined | null): boolean {
  * 与服务端同步一次。幂等，可在应用挂载时安全调用。
  */
 export async function syncOnce(): Promise<void> {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
 
   try {
-    const res = await fetch('/api/state', { cache: 'no-store' });
+    const res = await fetch("/api/state", { cache: "no-store" });
     if (!res.ok) return;
     const state = (await res.json()) as {
       weightData?: WeightData;
@@ -55,7 +55,7 @@ export async function syncOnce(): Promise<void> {
       updatedAt?: string | null;
     };
 
-    const alreadySynced = localStorage.getItem(SYNCED_FLAG) === '1';
+    const alreadySynced = localStorage.getItem(SYNCED_FLAG) === "1";
     const serverHasData = !!state.updatedAt;
 
     // 首次迁移：本地有数据、服务端为空 → 推送本地
@@ -68,15 +68,15 @@ export async function syncOnce(): Promise<void> {
         payload.stats = s;
       }
       const c = loadConfig();
-      if (c.customBanks.length > 0 || c.enabledBanks.length > 0 || c.password !== '1234') {
+      if (c.customBanks.length > 0 || c.enabledBanks.length > 0 || c.password !== "1234") {
         payload.config = c;
       }
-      await fetch('/api/state', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      localStorage.setItem(SYNCED_FLAG, '1');
+      localStorage.setItem(SYNCED_FLAG, "1");
       return;
     }
 
@@ -84,7 +84,7 @@ export async function syncOnce(): Promise<void> {
     if (isNonEmpty(state.weightData)) saveWeightData(state.weightData as WeightData);
     if (state.stats) saveStats(state.stats as StudyStats);
     if (state.config) saveConfig(state.config as ParentConfig);
-    localStorage.setItem(SYNCED_FLAG, '1');
+    localStorage.setItem(SYNCED_FLAG, "1");
   } catch {
     // 网络失败：保持本地缓存，静默，下次挂载重试
   }

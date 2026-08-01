@@ -8,18 +8,18 @@
  * （/api/state），换浏览器/设备后可恢复进度（见 src/lib/stateSync.ts）。
  */
 
-import type { WeightData, StudyStats, ParentConfig } from './types';
+import type { WeightData, StudyStats, ParentConfig } from "./types";
 
 /* ========== 通用 ========== */
 
 export const KEYS = {
-  WEIGHT_DATA: 'hanzi_weight_data',
-  STUDY_STATS: 'hanzi_study_stats',
-  PARENT_CONFIG: 'hanzi_parent_config',
+  WEIGHT_DATA: "hanzi_weight_data",
+  STUDY_STATS: "hanzi_study_stats",
+  PARENT_CONFIG: "hanzi_parent_config",
 } as const;
 
 function safeGetItem<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(key);
     if (raw === null) return fallback;
@@ -30,7 +30,7 @@ function safeGetItem<T>(key: string, fallback: T): T {
 }
 
 function safeSetItem(key: string, value: unknown): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
@@ -41,14 +41,14 @@ function safeSetItem(key: string, value: unknown): boolean {
 
 /* ========== 服务端同步（防抖推送） ========== */
 
-type SyncBlock = 'weightData' | 'stats' | 'config';
+type SyncBlock = "weightData" | "stats" | "config";
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingBlocks = new Set<SyncBlock>();
 
 /** 保存后调度一次防抖推送（500ms 合并多次写入） */
 function scheduleServerSync(kind: SyncBlock) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   pendingBlocks.add(kind);
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
@@ -66,14 +66,14 @@ export function flushServerSync(keepalive = false): void {
   pendingBlocks.clear();
 
   const payload: Record<string, unknown> = {};
-  if (blocks.includes('weightData')) payload.weightData = loadWeightData();
-  if (blocks.includes('stats')) payload.stats = loadStats();
-  if (blocks.includes('config')) payload.config = loadConfig();
+  if (blocks.includes("weightData")) payload.weightData = loadWeightData();
+  if (blocks.includes("stats")) payload.stats = loadStats();
+  if (blocks.includes("config")) payload.config = loadConfig();
 
   try {
-    void fetch('/api/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+    void fetch("/api/state", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       keepalive,
     }).catch(() => {
@@ -85,8 +85,8 @@ export function flushServerSync(keepalive = false): void {
 }
 
 // 页面卸载时尽量推送未同步的变更
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => flushServerSync(true));
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => flushServerSync(true));
 }
 
 /* ========== 权重数据 ========== */
@@ -97,7 +97,7 @@ export function loadWeightData(): WeightData {
 
 export function saveWeightData(data: WeightData): boolean {
   const ok = safeSetItem(KEYS.WEIGHT_DATA, data);
-  scheduleServerSync('weightData');
+  scheduleServerSync("weightData");
   return ok;
 }
 
@@ -107,7 +107,7 @@ export function loadStats(): StudyStats {
   return safeGetItem<StudyStats>(KEYS.STUDY_STATS, {
     totalCalls: 0,
     todayCalls: 0,
-    todayDate: '',
+    todayDate: "",
     weeklyCalls: 0,
     history: {},
     sentenceHistory: [],
@@ -117,7 +117,7 @@ export function loadStats(): StudyStats {
 
 export function saveStats(stats: StudyStats): boolean {
   const ok = safeSetItem(KEYS.STUDY_STATS, stats);
-  scheduleServerSync('stats');
+  scheduleServerSync("stats");
   return ok;
 }
 
@@ -125,7 +125,7 @@ export function saveStats(stats: StudyStats): boolean {
 
 export function loadConfig(): ParentConfig {
   return safeGetItem<ParentConfig>(KEYS.PARENT_CONFIG, {
-    password: '1234',
+    password: "1234",
     enabledBanks: [],
     customBanks: [],
   });
@@ -133,6 +133,6 @@ export function loadConfig(): ParentConfig {
 
 export function saveConfig(config: ParentConfig): boolean {
   const ok = safeSetItem(KEYS.PARENT_CONFIG, config);
-  scheduleServerSync('config');
+  scheduleServerSync("config");
   return ok;
 }

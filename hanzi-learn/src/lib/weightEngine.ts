@@ -1,4 +1,4 @@
-import { CharEntry } from './types';
+import { CharEntry } from "./types";
 
 /**
  * 加权不放回抽样排序
@@ -20,26 +20,24 @@ export function weightedShuffle(chars: CharEntry[]): string {
       if (rand <= 0) {
         const picked = candidates[i];
         result.push(picked.char);
-        debugSteps.push(
-          `  选 "${picked.char}" (权重${picked.weight}, 总权重${totalWeight})`
-        );
+        debugSteps.push(`  选 "${picked.char}" (权重${picked.weight}, 总权重${totalWeight})`);
         candidates.splice(i, 1);
         break;
       }
     }
   }
 
-  console.log('[weightEngine] 加权排序过程:');
+  console.log("[weightEngine] 加权排序过程:");
   debugSteps.forEach((s) => console.log(s));
-  console.log('[weightEngine] 排序结果:', result.join(''));
+  console.log("[weightEngine] 排序结果:", result.join(""));
 
-  return result.join('');
+  return result.join("");
 }
 
 /** 权重日志辅助 */
 export function logWeightState(chars: CharEntry[], label: string) {
   const sorted = [...chars].sort((a, b) => b.weight - a.weight);
-  console.log(`[weightEngine] ${label}:`, sorted.map(c => `${c.char}:${c.weight}`).join(', '));
+  console.log(`[weightEngine] ${label}:`, sorted.map((c) => `${c.char}:${c.weight}`).join(", "));
 }
 
 /** 权重上限 */
@@ -58,7 +56,7 @@ export const INITIAL_WEIGHT = 1;
 export function updateWeights(
   chars: CharEntry[],
   usedSet: Set<string>,
-  round: number
+  round: number,
 ): CharEntry[] {
   return chars.map((c) => {
     if (usedSet.has(c.char)) {

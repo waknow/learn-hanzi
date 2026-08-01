@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useRef, useCallback, useEffect } from 'react';
-import { SoundEngine } from '@/lib/soundEngine';
+import { useRef, useCallback, useEffect } from "react";
+import { SoundEngine } from "@/lib/soundEngine";
 
-export type SoundAction = 'ding' | 'rocket' | 'success' | 'error' | 'tick';
+export type SoundAction = "ding" | "rocket" | "success" | "error" | "tick";
 
 /**
  * 音效 Hook
@@ -31,24 +31,24 @@ export function useSound() {
       const engine = engineRef.current;
       if (!engine) return;
       switch (action) {
-        case 'ding':
+        case "ding":
           engine.ding();
           break;
-        case 'rocket':
+        case "rocket":
           engine.rocket();
           break;
-        case 'success':
+        case "success":
           engine.success();
           break;
-        case 'error':
+        case "error":
           engine.error();
           break;
-        case 'tick':
+        case "tick":
           engine.tick();
           break;
       }
     },
-    [init]
+    [init],
   );
 
   /** 语音朗读 */
@@ -57,7 +57,7 @@ export function useSound() {
       init();
       engineRef.current?.speak(text);
     },
-    [init]
+    [init],
   );
 
   /** 清理 */

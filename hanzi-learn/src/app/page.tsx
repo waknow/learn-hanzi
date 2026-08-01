@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 
 /**
  * 首页入口
@@ -16,12 +16,10 @@ export default function HomePage() {
       <motion.div
         initial={{ y: -30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
         className="text-center"
       >
-        <h1 className="text-5xl md:text-6xl font-cartoon text-gray-700 mb-2">
-          🎈 快乐识字 🎈
-        </h1>
+        <h1 className="text-5xl md:text-6xl font-cartoon text-gray-700 mb-2">🎈 快乐识字 🎈</h1>
         <p className="text-gray-400 text-lg">小朋友学汉字的好朋友</p>
       </motion.div>
 
@@ -31,10 +29,10 @@ export default function HomePage() {
         <motion.button
           initial={{ x: -50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => router.push('/child')}
+          onClick={() => router.push("/child")}
           className="flex-1 bg-gradient-to-br from-candy-pink to-candy-orange
                      rounded-4xl shadow-xl p-8 text-white text-center
                      flex flex-col items-center gap-3"
@@ -48,10 +46,10 @@ export default function HomePage() {
         <motion.button
           initial={{ x: 50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
+          transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => router.push('/parent')}
+          onClick={() => router.push("/parent")}
           className="flex-1 bg-gradient-to-br from-candy-purple to-candy-sky
                      rounded-4xl shadow-xl p-8 text-white text-center
                      flex flex-col items-center gap-3"

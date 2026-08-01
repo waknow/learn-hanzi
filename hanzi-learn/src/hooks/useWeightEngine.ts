@@ -1,13 +1,9 @@
-'use client';
+"use client";
 
-import { useCallback, useMemo } from 'react';
-import {
-  weightedShuffle,
-  updateWeights,
-  initCharEntries,
-} from '@/lib/weightEngine';
-import { loadWeightData, saveWeightData } from '@/lib/storage';
-import type { CharEntry } from '@/lib/types';
+import { useCallback, useMemo } from "react";
+import { weightedShuffle, updateWeights, initCharEntries } from "@/lib/weightEngine";
+import { loadWeightData, saveWeightData } from "@/lib/storage";
+import type { CharEntry } from "@/lib/types";
 
 /**
  * 权重引擎 Hook
@@ -22,8 +18,8 @@ export function useWeightEngine(bankId: string, bankChars: string[]) {
 
     if (bankData) {
       // 检查字库是否变化：按字符内容比较（仅比长度会漏掉“字数相同但字不同”的修改）
-      const currentChars = bankData.chars.map((c) => c.char).join('');
-      const expectedChars = bankChars.join('');
+      const currentChars = bankData.chars.map((c) => c.char).join("");
+      const expectedChars = bankChars.join("");
       if (currentChars !== expectedChars) {
         console.log(`[weightEngine] 字库 ${bankId} 内容已变化，重新初始化`);
         const fresh = {
@@ -65,7 +61,7 @@ export function useWeightEngine(bankId: string, bankChars: string[]) {
       bankData.round = nextRound;
       saveWeightData(allData);
     },
-    [bankId]
+    [bankId],
   );
 
   /** 重置权重 */

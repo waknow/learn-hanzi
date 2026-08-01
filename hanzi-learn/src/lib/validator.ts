@@ -9,19 +9,13 @@ export function extractChineseChars(text: string): string[] {
 }
 
 /** 找出文本中超出的字（不在 allowedSet 中的汉字） */
-export function findExtraChars(
-  text: string,
-  allowedSet: Set<string>
-): string[] {
+export function findExtraChars(text: string, allowedSet: Set<string>): string[] {
   const chars = extractChineseChars(text);
   return [...new Set(chars.filter((c) => !allowedSet.has(c)))];
 }
 
 /** 找出使用的字（在 allowedSet 中的汉字） */
-export function findUsedChars(
-  text: string,
-  allowedSet: Set<string>
-): string[] {
+export function findUsedChars(text: string, allowedSet: Set<string>): string[] {
   const chars = extractChineseChars(text);
   return [...new Set(chars.filter((c) => allowedSet.has(c)))];
 }
@@ -35,17 +29,39 @@ export function findUsedChars(
 
 const SENSITIVE_WORDS = [
   // 暴力/负面
-  '坏蛋', '可恶', '太坏',
+  "坏蛋",
+  "可恶",
+  "太坏",
   // 歧视/侮辱
-  '笨蛋', '蠢猪', '傻瓜', '废物', '懒猪',
+  "笨蛋",
+  "蠢猪",
+  "傻瓜",
+  "废物",
+  "懒猪",
   // 死亡/恐怖
-  '地狱', '魔鬼', '妖怪', '坟墓', '尸体',
+  "地狱",
+  "魔鬼",
+  "妖怪",
+  "坟墓",
+  "尸体",
   // 暴力动作
-  '打人', '杀人', '打死', '骂人', '毒药', '伤害', '流血',
+  "打人",
+  "杀人",
+  "打死",
+  "骂人",
+  "毒药",
+  "伤害",
+  "流血",
   // 负面情绪（组合词）
-  '痛哭', '痛苦', '伤心', '凶狠', '残忍', '暴力',
+  "痛哭",
+  "痛苦",
+  "伤心",
+  "凶狠",
+  "残忍",
+  "暴力",
   // 儿童不宜
-  '讨厌', '恶心',
+  "讨厌",
+  "恶心",
 ];
 
 /** 检查文本是否包含敏感内容 */

@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
 interface Star {
   x: number;
@@ -21,7 +21,7 @@ export default function ParticleBg({ count = 12 }: { count?: number }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const resize = () => {
@@ -29,7 +29,7 @@ export default function ParticleBg({ count = 12 }: { count?: number }) {
       canvas.height = window.innerHeight;
     };
     resize();
-    window.addEventListener('resize', resize);
+    window.addEventListener("resize", resize);
 
     // 初始化星星
     const stars: Star[] = Array.from({ length: count }, () => ({
@@ -79,15 +79,11 @@ export default function ParticleBg({ count = 12 }: { count?: number }) {
 
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('resize', resize);
+      window.removeEventListener("resize", resize);
     };
   }, [count]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-0"
-      aria-hidden="true"
-    />
+    <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" aria-hidden="true" />
   );
 }

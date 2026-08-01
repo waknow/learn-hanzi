@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 /**
  * 无操作超时 Hook
@@ -10,11 +10,7 @@ import { useState, useEffect, useCallback } from 'react';
  * @param onTimeout 超时回调
  * @param enabled 是否启用（默认 true）
  */
-export function useIdleTimeout(
-  timeoutMs: number,
-  onTimeout: () => void,
-  enabled = true
-) {
+export function useIdleTimeout(timeoutMs: number, onTimeout: () => void, enabled = true) {
   const [showHint, setShowHint] = useState(false);
 
   const reset = useCallback(() => {

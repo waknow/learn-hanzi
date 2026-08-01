@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { loadConfig, saveConfig } from '@/lib/storage';
+import { useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { loadConfig, saveConfig } from "@/lib/storage";
 
 interface PasswordGateProps {
   onSuccess: () => void;
@@ -13,22 +13,22 @@ interface PasswordGateProps {
  * 首次使用引导设置密码，之后每次验证
  */
 export default function PasswordGate({ onSuccess }: PasswordGateProps) {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [isFirstTime, setIsFirstTime] = useState(true);
-  const [newPassword, setNewPassword] = useState('');
-  const [step, setStep] = useState<'verify' | 'set1' | 'set2'>('verify');
+  const [newPassword, setNewPassword] = useState("");
+  const [step, setStep] = useState<"verify" | "set1" | "set2">("verify");
   const [error, setError] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     const config = loadConfig();
     if (config.password) {
       setIsFirstTime(false);
-      setStep('verify');
+      setStep("verify");
     } else {
       setIsFirstTime(true);
-      setStep('set1');
-      setMessage('设置家长密码（4位数字）');
+      setStep("set1");
+      setMessage("设置家长密码（4位数字）");
     }
   }, []);
 
@@ -36,7 +36,7 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
     (digit: string) => {
       setError(false);
 
-      if (step === 'verify') {
+      if (step === "verify") {
         const next = input + digit;
         if (next.length <= 4) {
           setInput(next);
@@ -48,22 +48,22 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
             } else {
               setError(true);
               setTimeout(() => {
-                setInput('');
+                setInput("");
                 setError(false);
               }, 600);
             }
           }
         }
-      } else if (step === 'set1') {
+      } else if (step === "set1") {
         const next = newPassword + digit;
         if (next.length <= 4) {
           setNewPassword(next);
           if (next.length === 4) {
-            setStep('set2');
-            setMessage('再次输入确认密码');
+            setStep("set2");
+            setMessage("再次输入确认密码");
           }
         }
-      } else if (step === 'set2') {
+      } else if (step === "set2") {
         const next = input + digit;
         if (next.length <= 4) {
           setInput(next);
@@ -76,11 +76,11 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
               onSuccess();
             } else {
               setError(true);
-              setMessage('两次密码不一致，重新设置');
+              setMessage("两次密码不一致，重新设置");
               setTimeout(() => {
-                setInput('');
-                setNewPassword('');
-                setStep('set1');
+                setInput("");
+                setNewPassword("");
+                setStep("set1");
                 setError(false);
               }, 800);
             }
@@ -88,20 +88,20 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
         }
       }
     },
-    [input, newPassword, step, onSuccess]
+    [input, newPassword, step, onSuccess],
   );
 
   const handleDelete = useCallback(() => {
-    if (step === 'verify') {
+    if (step === "verify") {
       setInput((prev) => prev.slice(0, -1));
-    } else if (step === 'set2') {
+    } else if (step === "set2") {
       setInput((prev) => prev.slice(0, -1));
-    } else if (step === 'set1') {
+    } else if (step === "set1") {
       setNewPassword((prev) => prev.slice(0, -1));
     }
   }, [step]);
 
-  const displayValue = step === 'set1' ? newPassword : input;
+  const displayValue = step === "set1" ? newPassword : input;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-candy-purple/20 to-candy-sky/20 flex items-center justify-center p-8">
@@ -113,11 +113,9 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
         <div className="text-center mb-8">
           <div className="text-5xl mb-4">🔒</div>
           <h2 className="text-2xl font-cartoon text-gray-700">
-            {isFirstTime ? '设置家长密码' : '家长验证'}
+            {isFirstTime ? "设置家长密码" : "家长验证"}
           </h2>
-          {message && (
-            <p className="text-sm text-gray-400 mt-2">{message}</p>
-          )}
+          {message && <p className="text-sm text-gray-400 mt-2">{message}</p>}
         </div>
 
         {/* 密码圆点 */}
@@ -125,16 +123,10 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
           {[0, 1, 2, 3].map((i) => (
             <motion.div
               key={i}
-              animate={
-                error
-                  ? { x: [-5, 5, -5, 5, 0], backgroundColor: '#ef4444' }
-                  : {}
-              }
+              animate={error ? { x: [-5, 5, -5, 5, 0], backgroundColor: "#ef4444" } : {}}
               transition={{ duration: 0.4 }}
               className={`w-5 h-5 rounded-full border-2 ${
-                displayValue.length > i
-                  ? 'bg-candy-purple border-candy-purple'
-                  : 'border-gray-300'
+                displayValue.length > i ? "bg-candy-purple border-candy-purple" : "border-gray-300"
               }`}
             />
           ))}
@@ -142,7 +134,7 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
 
         {/* 数字键盘 */}
         <div className="grid grid-cols-3 gap-3">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
             <button
               key={d}
               onClick={() => handleDigit(d)}
@@ -162,7 +154,7 @@ export default function PasswordGate({ onSuccess }: PasswordGateProps) {
             ←
           </button>
           <button
-            onClick={() => handleDigit('0')}
+            onClick={() => handleDigit("0")}
             className="h-16 text-2xl font-bold rounded-2xl bg-gray-50 active:bg-gray-200 
                        text-gray-700 hover:bg-gray-100 transition-colors
                        active:scale-95 transform"
