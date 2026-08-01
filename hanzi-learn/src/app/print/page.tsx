@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { findBankById, getMergedBankChars } from '@/lib/wordBanks';
 import PrintCards from '@/components/child/PrintCards';
 
@@ -10,9 +10,13 @@ function PrintPageInner() {
   const searchParams = useSearchParams();
   const bankId = searchParams.get('bank') || '';
   const isComprehensive = bankId === 'comprehensive';
-  const bank = isComprehensive
-    ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
-    : findBankById(bankId);
+  // useMemo：comprehensive 分支每次渲染会新建对象，不用 useMemo 会导致
+  // useEffect([bank]) 每次渲染都执行（潜在无限重渲染）
+  const bank = useMemo(() => {
+    return isComprehensive
+      ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
+      : findBankById(bankId);
+  }, [isComprehensive, bankId]);
 
   const [chars, setChars] = useState<string[]>([]);
 

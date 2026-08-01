@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-page-custom-font -- App Router 根布局放 <link> 是官方推荐做法，该规则仅针对 Pages Router（pages/_document.js） */
 import type { Metadata, Viewport } from 'next';
 import StateSync from '@/components/shared/StateSync';
 import './globals.css';

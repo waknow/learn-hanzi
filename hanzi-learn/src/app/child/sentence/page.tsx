@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useCallback, useEffect } from 'react';
+import { Suspense, useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
 import IdleState from '@/components/child/IdleState';
@@ -63,7 +63,8 @@ function SentencePage() {
   const [consecutiveCount, setConsecutiveCount] = useState(0);
 
   // 权重引擎
-  const chars = bank?.chars || [];
+  // useMemo：bank 为空时 `|| []` 会每次渲染新建数组，导致依赖它的 useCallback 每次重建
+  const chars = useMemo(() => bank?.chars || [], [bank]);
   const weightEngine = useWeightEngine(bankId, chars);
 
   // 解析字库：内置找不到时查自定义字库；都没有则跳回选择页
@@ -176,7 +177,8 @@ function SentencePage() {
       setErrorMsg('哎呀，出错了！');
       setState('idle');
     }
-  }, [bank, bankId, weightEngine, play, recordCall]);
+    // chars 由 bank 派生，与 bank 同变；显式列出满足 exhaustive-deps
+  }, [bank, bankId, weightEngine, play, recordCall, chars]);
 
   // 安全兜底：loading 超过 15 秒强制回到 idle
   useEffect(() => {

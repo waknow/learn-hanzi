@@ -1,0 +1,6 @@
+.next/
+node_modules/
+data/
+coverage/
+*.tar
+package-lock.json
