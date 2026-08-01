@@ -1,6 +1,6 @@
 /**
  * 加权引擎单测
- * 覆盖：洗牌完整性、权重更新规则（用→归1 / 未用→+1 上限20）、初始化
+ * 覆盖：洗牌完整性、权重更新规则（用→归0 / 未用→+1 无上限）、初始化
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {

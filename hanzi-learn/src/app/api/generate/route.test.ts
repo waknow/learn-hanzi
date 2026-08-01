@@ -124,7 +124,7 @@ describe("POST /api/generate", () => {
     expect(body.text).toBe("小猫");
   });
 
-  it("3 次均未通过时降级到保底句", async () => {
+  it("3 次均未通过时直示权重最大单字", async () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
     // 每次返回同一越界句：第 2、3 次会被"重复输出"拦截
     vi.stubGlobal(
