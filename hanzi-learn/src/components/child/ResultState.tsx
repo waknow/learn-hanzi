@@ -10,6 +10,8 @@ interface ResultStateProps {
   isFallback: boolean;
   consecutiveCount: number;
   onRegenerate: () => void;
+  /** 单字直示（复习）模式 */
+  isDirectShow?: boolean;
 }
 
 /**
@@ -25,6 +27,7 @@ export default function ResultState({
   isFallback,
   consecutiveCount,
   onRegenerate,
+  isDirectShow = false,
 }: ResultStateProps) {
   const { speak, play } = useSound();
   const [showButton, setShowButton] = useState(false);
@@ -95,7 +98,7 @@ export default function ResultState({
                     damping: 12,
                   }}
                   className={`
-                    inline-block text-5xl md:text-7xl 
+                    inline-block ${isDirectShow ? "text-7xl md:text-9xl" : "text-5xl md:text-7xl"} 
                     ${/[\u4e00-\u9fff]/.test(char) ? "text-gray-800" : "text-gray-400"}
                     leading-relaxed
                   `}
@@ -131,16 +134,27 @@ export default function ResultState({
         </div>
       </motion.div>
 
-      {/* 保底句提示 */}
-      {isFallback && (
+      {/* 单字直示/保底句提示 */}
+      {isDirectShow ? (
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8 }}
           className="mt-2 text-xs text-gray-300"
         >
-          💡 AI 偷懒了，这是备用句子
+          🌟 复习单字：点一下听读音
         </motion.p>
+      ) : (
+        isFallback && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="mt-2 text-xs text-gray-300"
+          >
+            💡 AI 偷懒了，这是备用句子
+          </motion.p>
+        )
       )}
 
       {/* 再来一句按钮 */}
