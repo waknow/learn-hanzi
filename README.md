@@ -11,7 +11,7 @@ cd hanzi-learn
 # 安装依赖
 npm install
 
-# 配置 DeepSeek API Key（可选，无 Key 自动使用内置保底句）
+# 配置 DeepSeek API Key（可选，无 Key 自动直示字库中权重最大的单字）
 echo 'DEEPSEEK_API_KEY=sk-your-key-here' > env
 
 # 启动开发服务器
@@ -71,7 +71,7 @@ npm run typecheck    # TypeScript 类型检查
 
 **两级字库**：内置「一级」（60 个基础字）和「二级」（预留扩展）字库，支持合并为「综合」模式。
 
-**加权随机排序**：每个汉字初始权重为 1。被 AI 使用后权重重置为 1，未被使用的每次 +1（上限 20）。权重越高，下次被排到前面的概率越大，确保字库中每个字最终都被用到。
+**加权随机排序**：每个汉字初始权重为 1。被 AI 使用后权重重置为 0，未被使用的每次 +1（无上限）。权重越高，下次被排到前面的概率越大；超过阈值（20）的字会直接显示单字，确保字库中每个字最终都被用到。
 
 **频率分级**：打印字卡时，按汉字日常使用频率分为 3 级（Tier 1 印 3 份 / Tier 2 印 2 份 / Tier 3 印 1 份），配合系数调节份数。
 
@@ -133,7 +133,6 @@ hanzi-learn/
 │       ├── wordBanks.ts                # 字库数据（一级/二级）
 │       ├── weightEngine.ts             # 加权不放回抽样算法
 │       ├── validator.ts               # 句子验证（敏感词/越界/评分）
-│       ├── fallbackSentences.ts        # 内置保底句池（诗词风格）
 │       ├── pinyin.ts                   # 拼音映射表
 │       ├── colors.ts                   # 染色系统（24 色配色）
 │       ├── frequency.ts                # 字频分级（Tier 1~3）
@@ -162,7 +161,7 @@ hanzi-learn/
                                                       └─ 自评分数检查（自然度 + 口语化）
                                                       ↓
                                           ⑤ 通过 → 返回 | 失败 → 回传反馈重试（最多 3 次）
-                                          ⑥ 全部失败 → 使用内置保底句
+                                          ⑥ 全部失败 → 直示权重最大单字
 ```
 
 AI 提示词采用 **自评分机制**：每次输出附带「自然程度分数」和「口语化分数」（1-10），低于阈值自动重试，确保输出质量。
@@ -171,7 +170,7 @@ AI 提示词采用 **自评分机制**：每次输出附带「自然程度分数
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `DEEPSEEK_API_KEY` | 否 | DeepSeek API 密钥。不填则使用内置保底句池 |
+| `DEEPSEEK_API_KEY` | 否 | DeepSeek API 密钥。不填则直示权重最大的单字 |
 | `DEEPSEEK_MODEL` | 否 | 生成模型名，默认 `deepseek-v4-flash`，可切换为 `deepseek-v4-pro` |
 | `STATE_FILE` | 否 | 服务端状态文件路径，默认 `data/state.json`（Docker 下为 `/app/data/state.json`） |
 

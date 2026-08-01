@@ -42,6 +42,12 @@ describe("ResultState", () => {
     expect(screen.getByText(/AI 偷懒了，这是备用句子/)).toBeInTheDocument();
   });
 
+  it("isDirectShow 时显示复习单字提示", () => {
+    render(<ResultState {...BASE_PROPS} isDirectShow text="大" usedChars={["大"]} />);
+    expect(screen.getByText(/复习单字/)).toBeInTheDocument();
+    expect(screen.queryByText(/AI 偷懒/)).not.toBeInTheDocument();
+  });
+
   it("点击「再来一句」触发 onRegenerate", () => {
     const onRegenerate = vi.fn();
     render(<ResultState {...BASE_PROPS} onRegenerate={onRegenerate} />);

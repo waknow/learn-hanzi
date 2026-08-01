@@ -48,13 +48,31 @@ describe("POST /api/generate", () => {
     expect(res.status).toBe(400);
   });
 
-  it("无 API Key 时返回保底句", async () => {
+  it("无 API Key 时返回权重最大的单字", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
+    const res = await POST(
+      makeReq({
+        bankId: "level1",
+        sortedChars: "小猫",
+        themeWeights: JSON.stringify([
+          { char: "小", weight: 1 },
+          { char: "猫", weight: 25 },
+        ]),
+      }),
+    );
+    const body = await res.json();
+    expect(body.isFallback).toBe(true);
+    expect(body.text).toBe("猫");
+    expect(body.usedChars).toEqual(["猫"]);
+    expect(body.extraChars).toEqual([]);
+  });
+
+  it("无 themeWeights 时取 sortedChars 第一个字", async () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "");
     const res = await POST(makeReq({ bankId: "level1", sortedChars: "小猫" }));
     const body = await res.json();
     expect(body.isFallback).toBe(true);
-    expect(body.text.length).toBeGreaterThan(0);
-    expect(body.extraChars).toEqual([]);
+    expect(body.text).toBe("小");
   });
 
   it("AI 返回合规句子：剥离评分后缀并返回用字", async () => {
@@ -106,16 +124,26 @@ describe("POST /api/generate", () => {
     expect(body.text).toBe("小猫");
   });
 
-  it("3 次均未通过时降级到保底句", async () => {
+  it("3 次均未通过时直示权重最大单字", async () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
     // 每次返回同一越界句：第 2、3 次会被"重复输出"拦截
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(aiResponse("出界字句【自然程度-9 口语化-9 完整度-9】")) as never,
     );
-    const res = await POST(makeReq({ bankId: "bank-e", sortedChars: "小猫" }));
+    const res = await POST(
+      makeReq({
+        bankId: "bank-e",
+        sortedChars: "小猫",
+        themeWeights: JSON.stringify([
+          { char: "小", weight: 5 },
+          { char: "猫", weight: 30 },
+        ]),
+      }),
+    );
     const body = await res.json();
     expect(body.isFallback).toBe(true);
+    expect(body.text).toBe("猫");
   });
 
   it("DeepSeek HTTP 错误时重试并降级", async () => {
@@ -124,8 +152,18 @@ describe("POST /api/generate", () => {
       "fetch",
       vi.fn().mockResolvedValue(new Response("server error", { status: 500 })) as never,
     );
-    const res = await POST(makeReq({ bankId: "bank-f", sortedChars: "小猫" }));
+    const res = await POST(
+      makeReq({
+        bankId: "bank-f",
+        sortedChars: "小猫",
+        themeWeights: JSON.stringify([
+          { char: "小", weight: 5 },
+          { char: "猫", weight: 30 },
+        ]),
+      }),
+    );
     const body = await res.json();
     expect(body.isFallback).toBe(true);
+    expect(body.text).toBe("猫");
   });
 });

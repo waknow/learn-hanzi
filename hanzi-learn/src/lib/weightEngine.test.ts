@@ -1,6 +1,6 @@
 /**
  * 加权引擎单测
- * 覆盖：洗牌完整性、权重更新规则（用→归1 / 未用→+1 上限20）、初始化
+ * 覆盖：洗牌完整性、权重更新规则（用→归0 / 未用→+1 无上限）、初始化
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
@@ -51,22 +51,22 @@ describe("weightedShuffle", () => {
 });
 
 describe("updateWeights", () => {
-  it("用到的字权重归 1 并累计使用次数", () => {
+  it("用到的字权重归 0 并累计使用次数", () => {
     const chars: CharEntry[] = [
       { char: "小", weight: 5, totalUsed: 2, lastUsedRound: 3 },
       { char: "大", weight: 1, totalUsed: 0, lastUsedRound: 0 },
     ];
     const next = updateWeights(chars, new Set(["小"]), 4);
-    expect(next[0]).toEqual({ char: "小", weight: 1, totalUsed: 3, lastUsedRound: 4 });
+    expect(next[0]).toEqual({ char: "小", weight: 0, totalUsed: 3, lastUsedRound: 4 });
     // 未用到的字 +1
     expect(next[1]).toEqual({ char: "大", weight: 2, totalUsed: 0, lastUsedRound: 0 });
   });
 
-  it("未用到的字权重 +1 且封顶 MAX_WEIGHT", () => {
+  it("未用到的字权重 +1 无上限（超过 MAX_WEIGHT 继续累加）", () => {
     const chars: CharEntry[] = [{ char: "小", weight: MAX_WEIGHT, totalUsed: 0, lastUsedRound: 0 }];
     const next = updateWeights(chars, new Set(), 1);
-    expect(next[0].weight).toBe(MAX_WEIGHT);
-    expect(MAX_WEIGHT).toBe(20);
+    expect(next[0].weight).toBe(MAX_WEIGHT + 1);
+    expect(MAX_WEIGHT).toBe(20); // 常量语义：直示阈值
     expect(INITIAL_WEIGHT).toBe(1);
   });
 

@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { weightedShuffle, updateWeights, initCharEntries } from "@/lib/weightEngine";
+import { weightedShuffle, updateWeights, initCharEntries, MAX_WEIGHT } from "@/lib/weightEngine";
 import { loadWeightData, saveWeightData } from "@/lib/storage";
 import type { CharEntry } from "@/lib/types";
+
+/** 单字直示节流间隔（轮）：每 DIRECT_SHOW_GAP 轮最多直示一次 */
+export const DIRECT_SHOW_GAP = 3;
 
 /**
  * 权重引擎 Hook
@@ -22,7 +25,7 @@ export function useWeightEngine(bankId: string, bankChars: string[]) {
       const expectedChars = bankChars.join("");
       if (currentChars !== expectedChars) {
         console.log(`[weightEngine] 字库 ${bankId} 内容已变化，重新初始化`);
-        const fresh = {
+        const fresh: { round: number; chars: CharEntry[]; lastDirectShowRound?: number } = {
           round: 0,
           chars: initCharEntries(bankChars),
         };
@@ -34,7 +37,7 @@ export function useWeightEngine(bankId: string, bankChars: string[]) {
     }
 
     // 初始化新字库
-    const fresh: { round: number; chars: CharEntry[] } = {
+    const fresh: { round: number; chars: CharEntry[]; lastDirectShowRound?: number } = {
       round: 0,
       chars: initCharEntries(bankChars),
     };
@@ -80,11 +83,35 @@ export function useWeightEngine(bankId: string, bankChars: string[]) {
     return data.chars.map((c) => ({ char: c.char, weight: c.weight }));
   }, [getWeightData]);
 
+  /** 检查是否需要单字直示：存在 weight > MAX_WEIGHT 的字且距上次直示 ≥ 3 轮 → 返回权重最大的字；否则 null */
+  const getDirectShowChar = useCallback((): string | null => {
+    const data = getWeightData();
+    let best: CharEntry | null = null;
+    for (const c of data.chars) {
+      if (c.weight > MAX_WEIGHT && (!best || c.weight > best.weight)) best = c;
+    }
+    if (!best) return null;
+    const last = data.lastDirectShowRound ?? -DIRECT_SHOW_GAP;
+    if (data.round - last >= DIRECT_SHOW_GAP) return best.char;
+    return null;
+  }, [getWeightData]);
+
+  /** 标记本轮已直示（持久化 lastDirectShowRound = 当前轮次；应在 update 之后调用） */
+  const markDirectShown = useCallback(() => {
+    const allData = loadWeightData();
+    const bankData = allData[bankId];
+    if (!bankData) return;
+    bankData.lastDirectShowRound = bankData.round;
+    saveWeightData(allData);
+  }, [bankId]);
+
   return {
     getSortedChars,
     update,
     reset,
     getWeights,
     getWeightData,
+    getDirectShowChar,
+    markDirectShown,
   };
 }

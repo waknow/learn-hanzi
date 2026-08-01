@@ -3,7 +3,7 @@
 /** 单字在权重引擎中的状态 */
 export interface CharEntry {
   char: string;
-  weight: number; // ≥ 1, 上限 20
+  weight: number; // ≥ 0，未命中 +1 无上限；命中归 0
   totalUsed: number;
   lastUsedRound: number;
 }
@@ -21,6 +21,8 @@ export interface WeightData {
   [bankId: string]: {
     round: number;
     chars: CharEntry[];
+    /** 最近一次单字直示的轮次（节流用）；未直示过则缺省 */
+    lastDirectShowRound?: number;
   };
 }
 
