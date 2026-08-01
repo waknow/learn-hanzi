@@ -1,24 +1,28 @@
-'use client';
+"use client";
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
-import { findBankById, getMergedBankChars } from '@/lib/wordBanks';
-import PrintCards from '@/components/child/PrintCards';
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { findBankById, getMergedBankChars } from "@/lib/wordBanks";
+import PrintCards from "@/components/child/PrintCards";
 
 function PrintPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const bankId = searchParams.get('bank') || '';
-  const isComprehensive = bankId === 'comprehensive';
-  const bank = isComprehensive
-    ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
-    : findBankById(bankId);
+  const bankId = searchParams.get("bank") || "";
+  const isComprehensive = bankId === "comprehensive";
+  // useMemo：comprehensive 分支每次渲染会新建对象，不用 useMemo 会导致
+  // useEffect([bank]) 每次渲染都执行（潜在无限重渲染）
+  const bank = useMemo(() => {
+    return isComprehensive
+      ? { id: "comprehensive", name: "综合", emoji: "📚", chars: getMergedBankChars() }
+      : findBankById(bankId);
+  }, [isComprehensive, bankId]);
 
   const [chars, setChars] = useState<string[]>([]);
 
   useEffect(() => {
     if (!bank) {
-      router.push('/child');
+      router.push("/child");
       return;
     }
     setChars([...bank.chars]);
@@ -31,7 +35,7 @@ function PrintPageInner() {
       {/* 顶栏 */}
       <div className="no-print flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100">
         <button
-          onClick={() => router.push('/child')}
+          onClick={() => router.push("/child")}
           className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-lg active:scale-90 transition-transform"
         >
           ←
@@ -44,18 +48,20 @@ function PrintPageInner() {
       </div>
 
       {/* 卡片区域 */}
-      {chars.length > 0 && (
-        <PrintCards chars={chars} />
-      )}
+      {chars.length > 0 && <PrintCards chars={chars} />}
     </div>
   );
 }
 
 export default function PrintPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center text-gray-300 text-lg">加载中…</div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-gray-300 text-lg">
+          加载中…
+        </div>
+      }
+    >
       <PrintPageInner />
     </Suspense>
   );

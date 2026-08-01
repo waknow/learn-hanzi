@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { useSound } from '@/hooks/useSound';
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { useSound } from "@/hooks/useSound";
 
 interface ResultStateProps {
   text: string;
@@ -36,11 +36,11 @@ export default function ResultState({
   });
 
   // 拆成字符用于逐字动画
-  const chars = text.split('');
+  const chars = text.split("");
 
   // 分行（每行最多 12 个汉字 + 标点）
   const lines: string[] = [];
-  let currentLine = '';
+  let currentLine = "";
   for (const char of chars) {
     if (currentLine.length >= 12 && /[\u4e00-\u9fff]/.test(char)) {
       lines.push(currentLine);
@@ -52,7 +52,7 @@ export default function ResultState({
   if (currentLine) lines.push(currentLine);
 
   const handleSpeak = () => {
-    play('ding');
+    play("ding");
     speak(text);
   };
 
@@ -75,7 +75,7 @@ export default function ResultState({
       <motion.div
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
         className="bg-white/80 backdrop-blur-sm rounded-4xl shadow-lg px-6 py-8 
                    w-full max-w-full md:max-w-5xl cursor-pointer mx-4"
         onClick={handleSpeak}
@@ -83,20 +83,20 @@ export default function ResultState({
         <div className="text-center" style={{ fontFamily: "'KaiTi', 'STKaiti', serif" }}>
           {lines.map((line, lineIdx) => (
             <div key={lineIdx} className="flex justify-center flex-wrap gap-1 my-1">
-              {line.split('').map((char, charIdx) => (
+              {line.split("").map((char, charIdx) => (
                 <motion.span
                   key={`${lineIdx}-${charIdx}`}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{
                     delay: 0.3 + (lineIdx * 12 + charIdx) * 0.08,
-                    type: 'spring',
+                    type: "spring",
                     stiffness: 200,
                     damping: 12,
                   }}
                   className={`
                     inline-block text-5xl md:text-7xl 
-                    ${/[\u4e00-\u9fff]/.test(char) ? 'text-gray-800' : 'text-gray-400'}
+                    ${/[\u4e00-\u9fff]/.test(char) ? "text-gray-800" : "text-gray-400"}
                     leading-relaxed
                   `}
                 >
@@ -108,9 +108,7 @@ export default function ResultState({
         </div>
 
         {/* 提示朗读 */}
-        <p className="text-center text-gray-300 text-sm mt-4">
-          👆 点击句子听朗读
-        </p>
+        <p className="text-center text-gray-300 text-sm mt-4">👆 点击句子听朗读</p>
       </motion.div>
 
       {/* 已用字标签 */}
@@ -149,7 +147,7 @@ export default function ResultState({
       <motion.div
         initial={{ y: 60, opacity: 0 }}
         animate={showButton ? { y: 0, opacity: 1 } : {}}
-        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+        transition={{ type: "spring", stiffness: 200, damping: 15 }}
         className="mt-8"
       >
         <button

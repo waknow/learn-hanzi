@@ -61,7 +61,15 @@ npm run dev:lan      # 开发服务器（0.0.0.0，局域网可访问）
 npm run build        # 生产构建
 npm run start        # 启动生产服务
 npm run start:lan    # 启动生产服务（局域网可访问）
-npm run lint         # ESLint 检查
+npm run lint         # ESLint 检查（eslint .）
+npm run lint:fix     # ESLint 自动修复
+npm run format       # Prettier 格式化
+npm run format:check # Prettier 检查
+npm run typecheck    # tsc --noEmit 类型检查
+npm run test         # 测试 + 覆盖率（全项目 ≥60%，不达标失败）
+npm run test:lib     # lib 层测试（覆盖率 ≥80%）
+npm run test:watch   # 测试监听模式
+npm run check        # 一键检查：typecheck + lint + test
 npm run docker:build # Docker 构建（含代理 + tar 导出）
 ```
 
@@ -110,6 +118,15 @@ npm run docker:build # Docker 构建（含代理 + tar 导出）
 7. **环境变量**：`DEEPSEEK_API_KEY` 通过 `hanzi-learn/env` 文件注入，
    不写在 `.env` 或代码中。Docker 通过 `-v` 挂载。
 8. **API 路由**：仅在 `src/app/api/generate/route.ts` 存在，保持单一 API 端点。
+
+## 测试与质量
+
+- **测试框架**：Vitest（jsdom）+ Testing Library；测试文件与源码同目录（`*.test.ts(x)`），中文注释
+- **覆盖率门槛**：`npm run test` 全项目 lines/functions/statements ≥ 60%、branches ≥ 50%；
+  `npm run test:lib` 对 `src/lib` 要求 ≥ 80%（门槛配置见 `vitest.config.ts` / `vitest.lib.config.ts`）
+- **Lint**：`eslint .`（eslint-config-next + prettier 规则关闭冲突）；格式化用 Prettier（`.prettierrc.json`）
+- **类型检查**：`tsc --noEmit`（tsconfig 已 strict）
+- **提交前**：跑 `npm run check` 全绿（typecheck + lint + test）
 
 ## Important constraints
 

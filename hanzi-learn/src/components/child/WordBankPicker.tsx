@@ -1,36 +1,36 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { BUILT_IN_BANKS } from '@/lib/wordBanks';
-import { loadConfig } from '@/lib/storage';
-import type { WordBank } from '@/lib/types';
-import { useSound } from '@/hooks/useSound';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { BUILT_IN_BANKS } from "@/lib/wordBanks";
+import { loadConfig } from "@/lib/storage";
+import type { WordBank } from "@/lib/types";
+import { useSound } from "@/hooks/useSound";
 
 const CARD_COLORS = [
-  'from-candy-pink/30 to-candy-orange/30',
-  'from-candy-yellow/30 to-candy-green/30',
-  'from-candy-teal/30 to-candy-sky/30',
-  'from-candy-purple/30 to-candy-pink/30',
-  'from-candy-orange/30 to-candy-yellow/30',
-  'from-candy-green/30 to-candy-teal/30',
-  'from-candy-sky/30 to-candy-purple/30',
-  'from-candy-mint/30 to-candy-teal/30',
-  'from-candy-pink/20 to-candy-purple/30',
-  'from-candy-yellow/20 to-candy-orange/30',
+  "from-candy-pink/30 to-candy-orange/30",
+  "from-candy-yellow/30 to-candy-green/30",
+  "from-candy-teal/30 to-candy-sky/30",
+  "from-candy-purple/30 to-candy-pink/30",
+  "from-candy-orange/30 to-candy-yellow/30",
+  "from-candy-green/30 to-candy-teal/30",
+  "from-candy-sky/30 to-candy-purple/30",
+  "from-candy-mint/30 to-candy-teal/30",
+  "from-candy-pink/20 to-candy-purple/30",
+  "from-candy-yellow/20 to-candy-orange/30",
 ];
 
 // 字库 Emoji 背景色
 const EMOJI_BG = [
-  'bg-candy-pink/20',
-  'bg-candy-orange/20',
-  'bg-candy-yellow/20',
-  'bg-candy-green/20',
-  'bg-candy-teal/20',
-  'bg-candy-sky/20',
-  'bg-candy-purple/20',
-  'bg-candy-mint/20',
+  "bg-candy-pink/20",
+  "bg-candy-orange/20",
+  "bg-candy-yellow/20",
+  "bg-candy-green/20",
+  "bg-candy-teal/20",
+  "bg-candy-sky/20",
+  "bg-candy-purple/20",
+  "bg-candy-mint/20",
 ];
 
 /** 字库选择卡片网格 */
@@ -52,7 +52,7 @@ export default function WordBankPicker() {
           : BUILT_IN_BANKS.filter((b) => enabledIds.includes(b.id));
 
       const customs = (config.customBanks || []).filter((b) =>
-        enabledIds.length === 0 ? true : enabledIds.includes(b.id)
+        enabledIds.length === 0 ? true : enabledIds.includes(b.id),
       );
 
       setBanks([...allBanks, ...customs]);
@@ -60,13 +60,13 @@ export default function WordBankPicker() {
 
     load();
     // 服务端同步完成后刷新（跨设备修改字库后立即生效）
-    window.addEventListener('hanzi-state-synced', load);
-    return () => window.removeEventListener('hanzi-state-synced', load);
+    window.addEventListener("hanzi-state-synced", load);
+    return () => window.removeEventListener("hanzi-state-synced", load);
   }, []);
 
   const handleSelect = (bankId: string) => {
     init();
-    play('ding');
+    play("ding");
     router.push(`/child/sentence?bank=${bankId}`);
   };
 
@@ -74,9 +74,7 @@ export default function WordBankPicker() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-gray-400 px-8">
         <div className="text-6xl mb-4">📚</div>
-        <p className="text-xl text-center">
-          请让家长先开启字库哦
-        </p>
+        <p className="text-xl text-center">请让家长先开启字库哦</p>
       </div>
     );
   }
@@ -85,7 +83,7 @@ export default function WordBankPicker() {
     <div className="min-h-screen p-6 flex flex-col">
       {/* 返回首页 */}
       <button
-        onClick={() => router.push('/')}
+        onClick={() => router.push("/")}
         className="self-start w-10 h-10 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-lg active:scale-90 transition-transform"
         aria-label="返回首页"
       >
@@ -103,7 +101,7 @@ export default function WordBankPicker() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             transition={{
               delay: i * 0.05,
-              type: 'spring',
+              type: "spring",
               stiffness: 300,
               damping: 15,
             }}
@@ -123,9 +121,7 @@ export default function WordBankPicker() {
             >
               {bank.emoji}
             </div>
-            <span className="text-lg font-cartoon text-gray-700">
-              {bank.name}
-            </span>
+            <span className="text-lg font-cartoon text-gray-700">{bank.name}</span>
             {bank.chars.length > 0 && (
               <button
                 onClick={(e) => {
@@ -150,13 +146,13 @@ export default function WordBankPicker() {
           animate={{ y: 0, opacity: 1, scale: 1 }}
           transition={{
             delay: banks.length * 0.05,
-            type: 'spring',
+            type: "spring",
             stiffness: 300,
             damping: 15,
           }}
           whileTap={{ scale: 0.92 }}
           whileHover={{ scale: 1.03 }}
-          onClick={() => handleSelect('comprehensive')}
+          onClick={() => handleSelect("comprehensive")}
           className={`
             aspect-square rounded-3xl relative
             bg-gradient-to-br from-candy-purple/30 to-candy-pink/30

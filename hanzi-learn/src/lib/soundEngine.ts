@@ -13,14 +13,14 @@ export class SoundEngine {
     if (!this.ctx) {
       this.ctx = new AudioContext();
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.ctx.state === "suspended") {
       this.ctx.resume();
     }
     return this.ctx;
   }
 
   private getCtx(): AudioContext | null {
-    if (!this.ctx || this.ctx.state === 'closed') return null;
+    if (!this.ctx || this.ctx.state === "closed") return null;
     return this.ctx;
   }
 
@@ -34,7 +34,7 @@ export class SoundEngine {
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.type = 'sine';
+    osc.type = "sine";
     osc.frequency.setValueAtTime(880, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
     gain.gain.setValueAtTime(0.3, ctx.currentTime);
@@ -51,7 +51,7 @@ export class SoundEngine {
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.type = 'sawtooth';
+    osc.type = "sawtooth";
     osc.frequency.setValueAtTime(200, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.5);
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
@@ -70,7 +70,7 @@ export class SoundEngine {
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.type = 'sine';
+      osc.type = "sine";
       const startTime = ctx.currentTime + i * 0.12;
       osc.frequency.setValueAtTime(freq, startTime);
       gain.gain.setValueAtTime(0, startTime);
@@ -89,7 +89,7 @@ export class SoundEngine {
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.type = 'square';
+    osc.type = "square";
     osc.frequency.setValueAtTime(200, ctx.currentTime);
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
@@ -121,10 +121,10 @@ export class SoundEngine {
 
   /** TTS 朗读文本 */
   speak(text: string) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel(); // 避免重叠
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-CN';
+    utterance.lang = "zh-CN";
     utterance.rate = 0.9;
     utterance.pitch = 1.2;
     window.speechSynthesis.speak(utterance);
@@ -132,7 +132,7 @@ export class SoundEngine {
 
   /* ========== 清理 ========== */
   dispose() {
-    if (this.ctx && this.ctx.state !== 'closed') {
+    if (this.ctx && this.ctx.state !== "closed") {
       this.ctx.close();
     }
     this.ctx = null;

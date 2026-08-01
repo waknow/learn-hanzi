@@ -1,0 +1,21 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals", "prettier"],
+  "ignorePatterns": [
+    ".next/**",
+    "node_modules/**",
+    "data/**",
+    "coverage/**",
+    "*.tar",
+    "hanzi-learn-image-*.tar"
+  ],
+  "overrides": [
+    {
+      "files": ["src/**/*.test.{ts,tsx}", "src/test/**/*.{ts,tsx}"],
+      "extends": ["plugin:testing-library/react"],
+      "rules": {
+        "testing-library/no-manual-cleanup": "off"
+      }
+    }
+  ]
+}

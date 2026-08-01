@@ -8,7 +8,15 @@
     "build": "next build",
     "start": "next start",
     "start:lan": "next start --hostname 0.0.0.0",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:lib": "vitest run --coverage --config vitest.lib.config.ts",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm run test",
     "docker:build": "bash scripts/build.sh",
     "tag": "bash scripts/tag.sh"
   },
@@ -21,12 +29,24 @@
     "recharts": "^2.12.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20.12.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.4.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-testing-library": "^7.16.2",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.0",
+    "prettier": "^3.9.6",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.10"
   }
 }

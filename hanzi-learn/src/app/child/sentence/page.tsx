@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import { Suspense, useState, useCallback, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { AnimatePresence } from 'framer-motion';
-import IdleState from '@/components/child/IdleState';
-import LoadingState from '@/components/child/LoadingState';
-import ResultState from '@/components/child/ResultState';
-import BackButton from '@/components/child/BackButton';
-import { findBankById, getMergedBankChars } from '@/lib/wordBanks';
-import { loadConfig } from '@/lib/storage';
-import type { WordBank } from '@/lib/types';
-import { useWeightEngine } from '@/hooks/useWeightEngine';
-import { useSound } from '@/hooks/useSound';
-import { useStats } from '@/hooks/useStats';
+import { Suspense, useState, useCallback, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence } from "framer-motion";
+import IdleState from "@/components/child/IdleState";
+import LoadingState from "@/components/child/LoadingState";
+import ResultState from "@/components/child/ResultState";
+import BackButton from "@/components/child/BackButton";
+import { findBankById, getMergedBankChars } from "@/lib/wordBanks";
+import { loadConfig } from "@/lib/storage";
+import type { WordBank } from "@/lib/types";
+import { useWeightEngine } from "@/hooks/useWeightEngine";
+import { useSound } from "@/hooks/useSound";
+import { useStats } from "@/hooks/useStats";
 
-type PageState = 'idle' | 'loading' | 'result';
+type PageState = "idle" | "loading" | "result";
 
 /** Suspense 包装器（useSearchParams 需要） */
 export default function SentencePageWrapper() {
@@ -41,29 +41,30 @@ export default function SentencePageWrapper() {
 function SentencePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const bankId = searchParams.get('bank') || '';
-  const isComprehensive = bankId === 'comprehensive';
+  const bankId = searchParams.get("bank") || "";
+  const isComprehensive = bankId === "comprehensive";
 
   // 字库解析：综合字库 / 内置字库优先；内置找不到时（自定义字库）在 effect 中补查
   const [bank, setBank] = useState<WordBank | undefined>(() =>
     isComprehensive
-      ? { id: 'comprehensive', name: '综合', emoji: '📚', chars: getMergedBankChars() }
-      : findBankById(bankId)
+      ? { id: "comprehensive", name: "综合", emoji: "📚", chars: getMergedBankChars() }
+      : findBankById(bankId),
   );
 
   const { play } = useSound();
   const { recordCall } = useStats();
 
-  const [state, setState] = useState<PageState>('idle');
-  const [sentence, setSentence] = useState('');
+  const [state, setState] = useState<PageState>("idle");
+  const [sentence, setSentence] = useState("");
   const [usedChars, setUsedChars] = useState<string[]>([]);
   const [isFallback, setIsFallback] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
   // 当前会话连续生成计数
   const [consecutiveCount, setConsecutiveCount] = useState(0);
 
   // 权重引擎
-  const chars = bank?.chars || [];
+  // useMemo：bank 为空时 `|| []` 会每次渲染新建数组，导致依赖它的 useCallback 每次重建
+  const chars = useMemo(() => bank?.chars || [], [bank]);
   const weightEngine = useWeightEngine(bankId, chars);
 
   // 解析字库：内置找不到时查自定义字库；都没有则跳回选择页
@@ -73,7 +74,7 @@ function SentencePage() {
     if (custom) {
       setBank(custom);
     } else {
-      router.push('/child');
+      router.push("/child");
     }
   }, [isComprehensive, bank, bankId, router]);
 
@@ -86,41 +87,41 @@ function SentencePage() {
   // 生成句子
   const handleGenerate = useCallback(async () => {
     // 先设 loading，再检查 bank，确保无论什么路径 loading 状态都生效
-    setState('loading');
-    play('rocket');
+    setState("loading");
+    play("rocket");
     if (!bank) {
-      clientLog('❌ bank 为空，无法生成');
-      setTimeout(() => setState('idle'), 500);
+      clientLog("❌ bank 为空，无法生成");
+      setTimeout(() => setState("idle"), 500);
       return;
     }
 
-    clientLog('===== 开始生成 =====');
-    clientLog('字库:', bankId, bank.name);
-    clientLog('字库汉字:', bank.chars);
+    clientLog("===== 开始生成 =====");
+    clientLog("字库:", bankId, bank.name);
+    clientLog("字库汉字:", bank.chars);
     // 获取权重数据
     const weightData = weightEngine.getWeightData();
-    clientLog('当前权重:', weightData.chars.map(c => `${c.char}:${c.weight}`).join(', '));
-    clientLog('当前轮次:', weightData.round);
+    clientLog("当前权重:", weightData.chars.map((c) => `${c.char}:${c.weight}`).join(", "));
+    clientLog("当前轮次:", weightData.round);
 
-    const weightChars = new Set(weightData.chars.map(c => c.char));
-    const missing = chars.filter(c => !weightChars.has(c));
-    const extra = weightData.chars.filter(c => !chars.includes(c.char)).map(c => c.char);
-    if (missing.length > 0) clientLog('⚠️ 权重中缺少的字:', missing);
-    if (extra.length > 0) clientLog('⚠️ 权重中多余的字:', extra);
+    const weightChars = new Set(weightData.chars.map((c) => c.char));
+    const missing = chars.filter((c) => !weightChars.has(c));
+    const extra = weightData.chars.filter((c) => !chars.includes(c.char)).map((c) => c.char);
+    if (missing.length > 0) clientLog("⚠️ 权重中缺少的字:", missing);
+    if (extra.length > 0) clientLog("⚠️ 权重中多余的字:", extra);
 
     const sortedChars = weightEngine.getSortedChars();
     const themeWeights = JSON.stringify(
-      weightData.chars.map(c => ({ char: c.char, weight: c.weight }))
+      weightData.chars.map((c) => ({ char: c.char, weight: c.weight })),
     );
-    clientLog('加权排序:', sortedChars);
-    clientLog('权重JSON:', themeWeights);
+    clientLog("加权排序:", sortedChars);
+    clientLog("权重JSON:", themeWeights);
 
     const startTime = Date.now();
 
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bankId,
           sortedChars: sortedChars,
@@ -139,14 +140,14 @@ function SentencePage() {
         error?: string;
       };
 
-      clientLog('API 响应:', data);
+      clientLog("API 响应:", data);
 
       if (res.ok && data.text) {
         clientLog(`✅ 生成成功: "${data.text}"`);
         clientLog(`用字:`, data.usedChars);
         clientLog(`是否保底句: ${data.isFallback}`);
 
-        play('success');
+        play("success");
         setSentence(data.text);
         setUsedChars(data.usedChars || []);
         setIsFallback(data.isFallback || false);
@@ -157,7 +158,7 @@ function SentencePage() {
 
         // 更新后权重
         const afterWeight = weightEngine.getWeightData();
-        clientLog('更新后权重:', afterWeight.chars.map(c => `${c.char}:${c.weight}`).join(', '));
+        clientLog("更新后权重:", afterWeight.chars.map((c) => `${c.char}:${c.weight}`).join(", "));
 
         // 记录统计
         recordCall(data.text, bankId, data.usedChars || []);
@@ -165,46 +166,47 @@ function SentencePage() {
         // 连续计数 +1
         setConsecutiveCount((c) => c + 1);
 
-        setState('result');
+        setState("result");
       } else {
-        clientLog(`❌ 请求失败: ${data.error || '未知错误'}`);
-        throw new Error(data.error || '生成失败');
+        clientLog(`❌ 请求失败: ${data.error || "未知错误"}`);
+        throw new Error(data.error || "生成失败");
       }
     } catch (err) {
       clientLog(`💥 异常:`, err instanceof Error ? err.message : err);
-      play('error');
-      setErrorMsg('哎呀，出错了！');
-      setState('idle');
+      play("error");
+      setErrorMsg("哎呀，出错了！");
+      setState("idle");
     }
-  }, [bank, bankId, weightEngine, play, recordCall]);
+    // chars 由 bank 派生，与 bank 同变；显式列出满足 exhaustive-deps
+  }, [bank, bankId, weightEngine, play, recordCall, chars]);
 
   // 安全兜底：loading 超过 15 秒强制回到 idle
   useEffect(() => {
-    if (state !== 'loading') return;
+    if (state !== "loading") return;
     const timer = setTimeout(() => {
-      clientLog('⏰ 加载超时（15s），强制回到 idle');
-      play('error');
-      setErrorMsg('小脑袋想太久了，再试一次吧！');
-      setState('idle');
+      clientLog("⏰ 加载超时（15s），强制回到 idle");
+      play("error");
+      setErrorMsg("小脑袋想太久了，再试一次吧！");
+      setState("idle");
     }, 15000);
     return () => clearTimeout(timer);
   }, [state, play]);
 
   // 加载超时（传递给 LoadingState 的 12s 超时 UI 反馈）
   const handleTimeout = useCallback(() => {
-    clientLog('⏰ LoadingState 12s 超时');
-    play('error');
-    setErrorMsg('小脑袋想太久了，再试一次吧！');
-    setState('idle');
+    clientLog("⏰ LoadingState 12s 超时");
+    play("error");
+    setErrorMsg("小脑袋想太久了，再试一次吧！");
+    setState("idle");
   }, [play]);
 
   // 再来一句：清空旧数据，直接重新生成
   const handleRegenerate = useCallback(() => {
-    setSentence('');
+    setSentence("");
     setUsedChars([]);
     setIsFallback(false);
-    setErrorMsg('');
-    setState('loading');
+    setErrorMsg("");
+    setState("loading");
     handleGenerate();
   }, [handleGenerate]);
 
@@ -215,7 +217,7 @@ function SentencePage() {
       <BackButton href="/child" />
 
       {/* 错误提示 */}
-      {errorMsg && state === 'idle' && (
+      {errorMsg && state === "idle" && (
         <div className="absolute top-24 left-0 right-0 text-center z-10">
           <p className="inline-block bg-red-50 text-red-400 px-6 py-2 rounded-full text-sm">
             {errorMsg}
@@ -224,11 +226,11 @@ function SentencePage() {
       )}
 
       <AnimatePresence mode="wait">
-        {state === 'idle' && (
+        {state === "idle" && (
           <IdleState key="idle" onGenerate={handleGenerate} consecutiveCount={consecutiveCount} />
         )}
-        {state === 'loading' && <LoadingState key="loading" onTimeout={handleTimeout} />}
-        {state === 'result' && (
+        {state === "loading" && <LoadingState key="loading" onTimeout={handleTimeout} />}
+        {state === "result" && (
           <ResultState
             key="result"
             text={sentence}

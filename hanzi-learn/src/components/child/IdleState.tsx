@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { useSound } from '@/hooks/useSound';
+import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
+import { useSound } from "@/hooks/useSound";
 
 interface IdleStateProps {
   onGenerate: () => void;
@@ -49,7 +49,7 @@ export default function IdleState({ onGenerate, consecutiveCount = 0 }: IdleStat
         animate={showArrow ? { opacity: 1, y: 0 } : {}}
         className="text-candy-pink text-4xl mb-4"
       >
-        {showArrow && '👇 点这里'}
+        {showArrow && "👇 点这里"}
       </motion.div>
 
       {/* 大按钮 */}
@@ -64,14 +64,14 @@ export default function IdleState({ onGenerate, consecutiveCount = 0 }: IdleStat
         animate={{
           scale: [1, 1.06, 1],
           boxShadow: [
-            '0 0 30px rgba(255,107,157,0.3), 0 10px 40px rgba(255,107,157,0.2)',
-            '0 0 60px rgba(255,107,157,0.5), 0 10px 40px rgba(255,107,157,0.3)',
-            '0 0 30px rgba(255,107,157,0.3), 0 10px 40px rgba(255,107,157,0.2)',
+            "0 0 30px rgba(255,107,157,0.3), 0 10px 40px rgba(255,107,157,0.2)",
+            "0 0 60px rgba(255,107,157,0.5), 0 10px 40px rgba(255,107,157,0.3)",
+            "0 0 30px rgba(255,107,157,0.3), 0 10px 40px rgba(255,107,157,0.2)",
           ],
         }}
         transition={{
-          scale: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
-          boxShadow: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
+          scale: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+          boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" },
         }}
         whileTap={{ scale: 0.95 }}
       >

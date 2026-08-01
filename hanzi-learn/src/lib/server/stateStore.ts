@@ -9,10 +9,10 @@
  *   - Docker:   <cwd>/data/state.json  → /app/data/state.json（compose 挂载 volume 持久化）
  */
 
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
-import type { WeightData, StudyStats, ParentConfig } from '../types';
+import type { WeightData, StudyStats, ParentConfig } from "../types";
 
 export interface StateFile {
   weightData: WeightData;
@@ -25,7 +25,7 @@ export interface StateFile {
 const DEFAULT_STATS: StudyStats = {
   totalCalls: 0,
   todayCalls: 0,
-  todayDate: '',
+  todayDate: "",
   weeklyCalls: 0,
   history: {},
   sentenceHistory: [],
@@ -33,13 +33,13 @@ const DEFAULT_STATS: StudyStats = {
 };
 
 const DEFAULT_CONFIG: ParentConfig = {
-  password: '1234',
+  password: "1234",
   enabledBanks: [],
   customBanks: [],
 };
 
 export function getStateFilePath(): string {
-  return process.env.STATE_FILE || path.join(process.cwd(), 'data', 'state.json');
+  return process.env.STATE_FILE || path.join(process.cwd(), "data", "state.json");
 }
 
 export function defaultState(): StateFile {
@@ -55,7 +55,7 @@ export function defaultState(): StateFile {
 export function readState(): StateFile {
   try {
     const filePath = getStateFilePath();
-    const raw = fs.readFileSync(filePath, 'utf-8');
+    const raw = fs.readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(raw) as Partial<StateFile>;
     const base = defaultState();
     return {
@@ -75,7 +75,7 @@ export function readState(): StateFile {
  * weightData 按 bankId 合并（客户端只推自己有的字库，避免覆盖其他字库的权重）。
  */
 export function writeState(
-  partial: Partial<Pick<StateFile, 'weightData' | 'stats' | 'config'>>
+  partial: Partial<Pick<StateFile, "weightData" | "stats" | "config">>,
 ): StateFile {
   const current = readState();
   const next: StateFile = {
@@ -88,7 +88,7 @@ export function writeState(
   const filePath = getStateFilePath();
   const tmpPath = `${filePath}.tmp`;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(tmpPath, JSON.stringify(next, null, 2), 'utf-8');
+  fs.writeFileSync(tmpPath, JSON.stringify(next, null, 2), "utf-8");
   fs.renameSync(tmpPath, filePath);
   return next;
 }
