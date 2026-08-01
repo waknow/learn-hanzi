@@ -98,7 +98,10 @@ if (typeof window !== "undefined" && !window.requestAnimationFrame) {
 }
 
 // 每个用例后清理挂载与本地存储
+// node 环境（API 路由测试 @vitest-environment node）无 localStorage，需守卫
 afterEach(() => {
   cleanup();
-  localStorage.clear();
+  if (typeof localStorage !== "undefined") {
+    localStorage.clear();
+  }
 });
