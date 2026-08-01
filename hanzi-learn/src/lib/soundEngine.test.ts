@@ -211,6 +211,7 @@ describe("speak 语音朗读", () => {
 
   it("无 speechSynthesis 时静默返回", () => {
     Object.defineProperty(window, "speechSynthesis", {
+      configurable: true, // 与 afterEach 对称，保证独立运行（-t 过滤）时 afterEach 可恢复
       writable: true,
       value: undefined,
     });
