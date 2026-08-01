@@ -183,6 +183,7 @@ describe("speak 语音朗读", () => {
     const cancel = vi.fn();
     const speak = vi.fn();
     Object.defineProperty(window, "speechSynthesis", {
+      configurable: true, // 与 afterEach 对称，保证独立运行（-t 过滤）时 afterEach 可恢复
       writable: true,
       value: { cancel, speak },
     });
