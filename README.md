@@ -11,7 +11,7 @@ cd hanzi-learn
 # 安装依赖
 npm install
 
-# 配置 DeepSeek API Key（可选，无 Key 自动使用内置保底句）
+# 配置 DeepSeek API Key（可选，无 Key 自动直示字库中权重最大的单字）
 echo 'DEEPSEEK_API_KEY=sk-your-key-here' > env
 
 # 启动开发服务器
