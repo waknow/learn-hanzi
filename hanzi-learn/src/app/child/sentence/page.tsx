@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useCallback, useEffect, useMemo } from "react";
+import { Suspense, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import IdleState from "@/components/child/IdleState";
@@ -63,6 +63,14 @@ function SentencePage() {
   // 当前会话连续生成计数
   const [consecutiveCount, setConsecutiveCount] = useState(0);
 
+  // 请求生命周期管理（见 handleGenerate）：
+  // - generatingRef：防重入，快速连点只触发一次
+  // - requestSeqRef：请求序号，用于丢弃过期响应
+  // - abortRef：可取消在途请求（重新生成 / 15s 超时兜底）
+  const generatingRef = useRef(false);
+  const requestSeqRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+
   // 权重引擎
   // useMemo：bank 为空时 `|| []` 会每次渲染新建数组，导致依赖它的 useCallback 每次重建
   const chars = useMemo(() => bank?.chars || [], [bank]);
@@ -86,59 +94,78 @@ function SentencePage() {
   }
 
   // 生成句子
+  //
+  // 请求生命周期管理：
+  // - generatingRef 防重入：快速连点只触发一次
+  // - requestSeqRef + isCurrent()：丢弃过期响应（重新生成后，旧请求的迟到结果不再覆盖界面）
+  // - abortRef：可取消在途请求（重新生成 / 15s 超时兜底），防止超时后句子"迟到"出现
   const handleGenerate = useCallback(async () => {
-    // 先设 loading，再检查 bank，确保无论什么路径 loading 状态都生效
-    setState("loading");
-    play("rocket");
-    if (!bank) {
-      clientLog("❌ bank 为空，无法生成");
-      setTimeout(() => setState("idle"), 500);
+    // 防重入：已有请求在途时忽略本次点击
+    if (generatingRef.current) {
+      clientLog("⏸ 已有请求在途，忽略本次点击");
       return;
     }
+    generatingRef.current = true;
 
-    clientLog("===== 开始生成 =====");
-    clientLog("字库:", bankId, bank.name);
-    clientLog("字库汉字:", bank.chars);
-    // 获取权重数据
-    const weightData = weightEngine.getWeightData();
-    clientLog("当前权重:", weightData.chars.map((c) => `${c.char}:${c.weight}`).join(", "));
-    clientLog("当前轮次:", weightData.round);
-
-    const weightChars = new Set(weightData.chars.map((c) => c.char));
-    const missing = chars.filter((c) => !weightChars.has(c));
-    const extra = weightData.chars.filter((c) => !chars.includes(c.char)).map((c) => c.char);
-    if (missing.length > 0) clientLog("⚠️ 权重中缺少的字:", missing);
-    if (extra.length > 0) clientLog("⚠️ 权重中多余的字:", extra);
-
-    // 直示检查：存在超过阈值的字 → 跳过 API，直接展示单字
-    const directChar = weightEngine.getDirectShowChar();
-    if (directChar) {
-      clientLog(`🌟 单字直示: "${directChar}"`);
-      play("success");
-      setSentence(directChar);
-      setUsedChars([directChar]);
-      setIsFallback(false);
-      setIsDirectShow(true);
-      weightEngine.update(new Set([directChar]));
-      weightEngine.markDirectShown();
-      recordCall(directChar, bankId, [directChar]);
-      setConsecutiveCount((c) => c + 1);
-      const afterWeight = weightEngine.getWeightData();
-      clientLog("更新后权重:", afterWeight.chars.map((c) => `${c.char}:${c.weight}`).join(", "));
-      setState("result");
-      return;
-    }
-
-    const sortedChars = weightEngine.getSortedChars();
-    const themeWeights = JSON.stringify(
-      weightData.chars.map((c) => ({ char: c.char, weight: c.weight })),
-    );
-    clientLog("加权排序:", sortedChars);
-    clientLog("权重JSON:", themeWeights);
-
-    const startTime = Date.now();
+    // 新一轮请求：取消上一轮未完成的请求，并记录本请求序号
+    const requestId = ++requestSeqRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const isCurrent = () => requestId === requestSeqRef.current;
 
     try {
+      // 先设 loading，再检查 bank，确保无论什么路径 loading 状态都生效
+      setState("loading");
+      play("rocket");
+      if (!bank) {
+        clientLog("❌ bank 为空，无法生成");
+        setTimeout(() => setState("idle"), 500);
+        return;
+      }
+
+      clientLog("===== 开始生成 =====");
+      clientLog("字库:", bankId, bank.name);
+      clientLog("字库汉字:", bank.chars);
+      // 获取权重数据
+      const weightData = weightEngine.getWeightData();
+      clientLog("当前权重:", weightData.chars.map((c) => `${c.char}:${c.weight}`).join(", "));
+      clientLog("当前轮次:", weightData.round);
+
+      const weightChars = new Set(weightData.chars.map((c) => c.char));
+      const missing = chars.filter((c) => !weightChars.has(c));
+      const extra = weightData.chars.filter((c) => !chars.includes(c.char)).map((c) => c.char);
+      if (missing.length > 0) clientLog("⚠️ 权重中缺少的字:", missing);
+      if (extra.length > 0) clientLog("⚠️ 权重中多余的字:", extra);
+
+      // 直示检查：存在超过阈值的字 → 跳过 API，直接展示单字
+      const directChar = weightEngine.getDirectShowChar();
+      if (directChar) {
+        clientLog(`🌟 单字直示: "${directChar}"`);
+        play("success");
+        setSentence(directChar);
+        setUsedChars([directChar]);
+        setIsFallback(false);
+        setIsDirectShow(true);
+        weightEngine.update(new Set([directChar]));
+        weightEngine.markDirectShown();
+        recordCall(directChar, bankId, [directChar]);
+        setConsecutiveCount((c) => c + 1);
+        const afterWeight = weightEngine.getWeightData();
+        clientLog("更新后权重:", afterWeight.chars.map((c) => `${c.char}:${c.weight}`).join(", "));
+        setState("result");
+        return;
+      }
+
+      const sortedChars = weightEngine.getSortedChars();
+      const themeWeights = JSON.stringify(
+        weightData.chars.map((c) => ({ char: c.char, weight: c.weight })),
+      );
+      clientLog("加权排序:", sortedChars);
+      clientLog("权重JSON:", themeWeights);
+
+      const startTime = Date.now();
+
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,6 +174,7 @@ function SentencePage() {
           sortedChars: sortedChars,
           themeWeights,
         }),
+        signal: controller.signal,
       });
 
       const elapsed = Date.now() - startTime;
@@ -159,6 +187,12 @@ function SentencePage() {
         isFallback?: boolean;
         error?: string;
       };
+
+      // 过期响应丢弃：期间已发起新一轮请求（如重新生成），本次结果作废
+      if (!isCurrent()) {
+        clientLog("⏹ 响应已过期（新一轮请求已发起），丢弃");
+        return;
+      }
 
       clientLog("API 响应:", data);
 
@@ -192,10 +226,21 @@ function SentencePage() {
         throw new Error(data.error || "生成失败");
       }
     } catch (err) {
+      if (controller.signal.aborted) {
+        // 主动取消（重新生成 / 15s 超时）：不改变状态，提示已由对应逻辑处理
+        clientLog("⏹ 请求已取消（超时或重新生成）");
+        return;
+      }
       clientLog(`💥 异常:`, err instanceof Error ? err.message : err);
       play("error");
       setErrorMsg("哎呀，出错了！");
       setState("idle");
+    } finally {
+      // 仅当没有更新请求接管时清理（新请求的 finally 会负责自己的清理）
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        generatingRef.current = false;
+      }
     }
     // chars 由 bank 派生，与 bank 同变；显式列出满足 exhaustive-deps
   }, [bank, bankId, weightEngine, play, recordCall, chars]);
@@ -205,6 +250,7 @@ function SentencePage() {
     if (state !== "loading") return;
     const timer = setTimeout(() => {
       clientLog("⏰ 加载超时（15s），强制回到 idle");
+      abortRef.current?.abort(); // 取消在途请求，防止迟到响应覆盖界面
       play("error");
       setErrorMsg("小脑袋想太久了，再试一次吧！");
       setState("idle");
