@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { findBankById, getMergedBankChars } from "@/lib/wordBanks";
+import { loadConfig } from "@/lib/storage";
 import PrintCards from "@/components/child/PrintCards";
 
 function PrintPageInner() {
@@ -13,9 +14,13 @@ function PrintPageInner() {
   // useMemo：comprehensive 分支每次渲染会新建对象，不用 useMemo 会导致
   // useEffect([bank]) 每次渲染都执行（潜在无限重渲染）
   const bank = useMemo(() => {
-    return isComprehensive
-      ? { id: "comprehensive", name: "综合", emoji: "📚", chars: getMergedBankChars() }
-      : findBankById(bankId);
+    if (isComprehensive) {
+      return { id: "comprehensive", name: "综合", emoji: "📚", chars: getMergedBankChars() };
+    }
+    const builtin = findBankById(bankId);
+    if (builtin) return builtin;
+    // 自定义字库：内置找不到时从配置补查（字库选择页对自定义字库也有打印入口）
+    return (loadConfig().customBanks || []).find((b) => b.id === bankId);
   }, [isComprehensive, bankId]);
 
   const [chars, setChars] = useState<string[]>([]);
