@@ -16,7 +16,18 @@ beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hanzi-api-gen-"));
   vi.stubEnv("STATE_FILE", path.join(tmpDir, "state.json"));
+  // 默认关闭重试退避，保持重试用例快速；专门的退避用例会单独覆盖
+  vi.stubEnv("DEEPSEEK_RETRY_BASE_MS", "0");
 });
+
+/** 挂起直到 signal 中止的 fetch（模拟 DeepSeek 超时场景） */
+function hangingFetch(init?: RequestInit): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => {
+      reject(Object.assign(new Error("The operation was aborted"), { name: "AbortError" }));
+    });
+  });
+}
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -144,6 +155,56 @@ describe("POST /api/generate", () => {
     const body = await res.json();
     expect(body.isFallback).toBe(true);
     expect(body.text).toBe("猫");
+  });
+
+  it("DeepSeek 请求超时时重试 3 次并降级直示", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
+    vi.stubEnv("DEEPSEEK_TIMEOUT_MS", "50");
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((_url: string, init?: RequestInit) => hangingFetch(init));
+    vi.stubGlobal("fetch", fetchMock as never);
+    const res = await POST(
+      makeReq({
+        bankId: "bank-g",
+        sortedChars: "小猫",
+        themeWeights: JSON.stringify([
+          { char: "小", weight: 5 },
+          { char: "猫", weight: 30 },
+        ]),
+      }),
+    );
+    const body = await res.json();
+    expect(body.isFallback).toBe(true);
+    expect(body.text).toBe("猫");
+    // 超时视为失败 → 3 次尝试全部超时
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("重试前应用指数退避（第二次请求等 base 毫秒后才发起）", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
+    vi.stubEnv("DEEPSEEK_RETRY_BASE_MS", "100");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("server error", { status: 500 }))
+      .mockResolvedValueOnce(aiResponse(GOOD));
+    vi.stubGlobal("fetch", fetchMock as never);
+    vi.useFakeTimers();
+    try {
+      const promise = POST(makeReq({ bankId: "bank-h", sortedChars: "小猫" }));
+      // 排空微任务：首次 fetch 已调用并返回 HTTP 500
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // 退避 100ms 结束后才发起第二次请求
+      await vi.advanceTimersByTimeAsync(100);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const res = await promise;
+      const body = await res.json();
+      expect(body.isFallback).toBe(false);
+      expect(body.text).toBe("小猫");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("DeepSeek HTTP 错误时重试并降级", async () => {

@@ -14,6 +14,28 @@ const MIN_SPOKEN = 6; // 口语化
 const MIN_COMPLETE = 8; // 意思完整度
 const MIN_SCORE = 7; // 三维平均分下限（日志参考）
 
+// DeepSeek 请求超时（毫秒）：上游挂起时中止请求并进入重试，避免无限占用连接。
+// 可用环境变量 DEEPSEEK_TIMEOUT_MS 覆盖（测试用）。
+const DEEPSEEK_TIMEOUT_MS = 12000;
+
+/** 读取请求超时毫秒数（env 覆盖；非法值回退默认） */
+function getDeepSeekTimeoutMs(): number {
+  const raw = process.env.DEEPSEEK_TIMEOUT_MS;
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : DEEPSEEK_TIMEOUT_MS;
+}
+
+// 重试指数退避基数（毫秒）：第 n 次重试前等待 base * 2^(n-1)。
+// 可用环境变量 DEEPSEEK_RETRY_BASE_MS 覆盖（测试置 0 保持用例快速）。
+const RETRY_BASE_MS = 500;
+
+/** 读取重试退避基数（env 覆盖；非法值回退默认） */
+function getRetryBaseMs(): number {
+  const raw = process.env.DEEPSEEK_RETRY_BASE_MS;
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : RETRY_BASE_MS;
+}
+
 /* ===== 最近生成历史（避免重复生成相同内容） ===== */
 
 /** 每个字库最多记住的最近句子数 */
@@ -212,6 +234,14 @@ export async function POST(req: Request) {
     // 记录本轮已被拒绝的输出，用于检测模型固执重复
     const attemptedOutputs: string[] = [];
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      // 失败重试前指数退避（限流/超时场景避免连打加剧问题）
+      if (attempt > 0) {
+        const wait = getRetryBaseMs() * 2 ** (attempt - 1);
+        if (wait > 0) {
+          log(`[${requestId}] 退避 ${wait}ms 后重试`);
+          await new Promise((resolve) => setTimeout(resolve, wait));
+        }
+      }
       log(`[${requestId}] ====== 尝试 ${attempt + 1}/${MAX_RETRIES} ======`);
 
       // 重试时逐步提高随机性，打破模型重复输出同一内容的僵局
@@ -226,6 +256,11 @@ export async function POST(req: Request) {
       };
       log(`[${requestId}] 请求模型: ${DEEPSEEK_MODEL} (thinking: disabled) 温度: ${temperature}`);
 
+      // 超时控制：DeepSeek 挂起时中止请求并进入重试，不会无限占用连接
+      const controller = new AbortController();
+      const timeoutMs = getDeepSeekTimeoutMs();
+      const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
+
       try {
         const startTime = Date.now();
 
@@ -236,6 +271,7 @@ export async function POST(req: Request) {
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(requestBody),
+          signal: controller.signal,
         });
 
         const elapsed = Date.now() - startTime;
@@ -432,8 +468,15 @@ export async function POST(req: Request) {
           continue;
         }
       } catch (err) {
-        log(`[${requestId}] ❌ 请求异常:`, err instanceof Error ? err.message : err);
+        const aborted = err instanceof Error && err.name === "AbortError";
+        if (aborted) {
+          log(`[${requestId}] ❌ 请求超时（>${timeoutMs}ms），视为失败进入重试`);
+        } else {
+          log(`[${requestId}] ❌ 请求异常:`, err instanceof Error ? err.message : err);
+        }
         continue;
+      } finally {
+        clearTimeout(abortTimer);
       }
     }
 
