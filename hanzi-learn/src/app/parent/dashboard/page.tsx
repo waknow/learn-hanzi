@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { loadStats } from "@/lib/storage";
+import { localDateString } from "@/lib/date";
 import type { StudyStats } from "@/lib/types";
 
 type ChartData = { char: string; count: number; fill: string }[];
@@ -36,19 +37,23 @@ export default function DashboardPage() {
   // 本周句子
   const recentSentences = stats.sentenceHistory.slice(0, 10);
 
-  // 本周学习天数
-  const today = new Date().toISOString().slice(0, 10);
+  // 本周学习天数（本地日期，避免 UTC 偏移跨天错位）
+  const today = localDateString();
   const weekDays: { date: string; label: string; active: boolean }[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateString(d);
     weekDays.push({
       date: dateStr,
       label: ["日", "一", "二", "三", "四", "五", "六"][d.getDay()],
       active: !!stats.history[dateStr],
     });
   }
+
+  // 本周（近 7 天）学习次数：从 history 计算。
+  // ⚠️ 不用 stats.weeklyCalls —— 它从未清零，是历史累计值，会误导家长。
+  const weeklySum = weekDays.reduce((sum, day) => sum + (stats.history[day.date] || 0), 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-candy-purple/10 to-candy-sky/10 p-6 pb-24">
@@ -72,7 +77,7 @@ export default function DashboardPage() {
           emoji="📅"
           color="candy-orange"
         />
-        <StatCard label="本周" value={`${stats.weeklyCalls}`} emoji="📈" color="candy-green" />
+        <StatCard label="本周" value={`${weeklySum}`} emoji="📈" color="candy-green" />
         <StatCard
           label="累计句子"
           value={`${stats.sentenceHistory.length}`}

@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { loadStats, saveStats } from "@/lib/storage";
+import { localDateString } from "@/lib/date";
 import type { SentenceRecord } from "@/lib/types";
 
 /**
@@ -16,7 +17,8 @@ export function useStats() {
   /** 记录一次请求 */
   const recordCall = useCallback((text: string, bankId: string, usedChars: string[]) => {
     const stats = loadStats();
-    const today = new Date().toISOString().slice(0, 10);
+    // 用本地日期（避免 UTC 偏移导致凌晨跨天错位）
+    const today = localDateString();
 
     // 更新日期相关
     if (stats.todayDate !== today) {

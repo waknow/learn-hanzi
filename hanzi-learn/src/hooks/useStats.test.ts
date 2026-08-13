@@ -16,7 +16,8 @@ describe("useStats", () => {
   });
 
   it("recordCall 累计总次数与今日次数", () => {
-    vi.setSystemTime(new Date("2026-08-01T10:00:00Z"));
+    // 用本地时间构造（2026-08-01 10:00 本地），保证任何时区下日期都是 08-01
+    vi.setSystemTime(new Date(2026, 7, 1, 10, 0, 0));
     const { result } = renderHook(() => useStats());
     act(() => result.current.recordCall("小猫", "level1", ["小", "猫"]));
     const stats = result.current.getStats();
@@ -26,10 +27,10 @@ describe("useStats", () => {
   });
 
   it("跨天重置今日计数", () => {
-    vi.setSystemTime(new Date("2026-08-01T10:00:00Z"));
+    vi.setSystemTime(new Date(2026, 7, 1, 10, 0, 0));
     const { result } = renderHook(() => useStats());
     act(() => result.current.recordCall("小猫", "level1", ["小", "猫"]));
-    vi.setSystemTime(new Date("2026-08-02T10:00:00Z"));
+    vi.setSystemTime(new Date(2026, 7, 2, 10, 0, 0));
     act(() => result.current.recordCall("大", "level1", ["大"]));
     const stats = result.current.getStats();
     expect(stats.totalCalls).toBe(2);
@@ -38,7 +39,7 @@ describe("useStats", () => {
   });
 
   it("记录句子历史与汉字使用统计", () => {
-    vi.setSystemTime(new Date("2026-08-01T10:00:00Z"));
+    vi.setSystemTime(new Date(2026, 7, 1, 10, 0, 0));
     const { result } = renderHook(() => useStats());
     act(() => result.current.recordCall("小猫", "level1", ["小", "猫"]));
     const stats = result.current.getStats();
@@ -52,7 +53,7 @@ describe("useStats", () => {
   });
 
   it("resetStats 清空统计", () => {
-    vi.setSystemTime(new Date("2026-08-01T10:00:00Z"));
+    vi.setSystemTime(new Date(2026, 7, 1, 10, 0, 0));
     const { result } = renderHook(() => useStats());
     act(() => result.current.recordCall("小猫", "level1", ["小", "猫"]));
     act(() => result.current.resetStats());
