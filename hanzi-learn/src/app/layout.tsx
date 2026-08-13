@@ -33,6 +33,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap"
           rel="stylesheet"
         />
+        {/* PWA Service Worker 注册（仅生产构建；开发模式避免缓存干扰热更新） */}
+        {process.env.NODE_ENV === "production" && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html:
+                'if ("serviceWorker" in navigator) {  window.addEventListener("load", function () {    navigator.serviceWorker.register("/sw.js").catch(function (err) {      console.error("[SW] 注册失败:", err);    });  });}',
+            }}
+          />
+        )}
       </head>
       <body className="min-h-screen">
         <StateSync />
