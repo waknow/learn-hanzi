@@ -2,8 +2,8 @@
 /**
  * /api/generate 路由测试
  *
- * 覆盖：缺参 400、无 Key 保底、AI 校验链（越界/敏感词/低分重试）、
- * 3 次全败降级、HTTP 错误降级、评分后缀剥离。
+ * 覆盖：缺参 400、无 Key 保底、AI 校验链（越界/敏感词/最少字数/最大长度）、
+ * 3 次全败降级、HTTP 错误降级、评分后缀剥离（防御性兼容）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs";
@@ -122,17 +122,33 @@ describe("POST /api/generate", () => {
     expect(body.text).toBe("小猫");
   });
 
-  it("评分过低触发重试", async () => {
+  it("单字输出触发重试（最少 2 个可用字）", async () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(aiResponse("小猫【自然程度-4 口语化-4 完整度-4】"))
+      .mockResolvedValueOnce(aiResponse("猫"))
       .mockResolvedValueOnce(aiResponse(GOOD));
     vi.stubGlobal("fetch", fetchMock as never);
     const res = await POST(makeReq({ bankId: "bank-d", sortedChars: "小猫" }));
     const body = await res.json();
     expect(body.isFallback).toBe(false);
     expect(body.text).toBe("小猫");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("输出过长触发重试（超过 12 个字）", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
+    const long = "一二三四五六七八九十小大猫"; // 13 个可用字，超过 MAX_OUTPUT_CHARS
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(aiResponse(long))
+      .mockResolvedValueOnce(aiResponse(GOOD));
+    vi.stubGlobal("fetch", fetchMock as never);
+    const res = await POST(makeReq({ bankId: "bank-d2", sortedChars: long }));
+    const body = await res.json();
+    expect(body.isFallback).toBe(false);
+    expect(body.text).toBe("小猫");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("3 次均未通过时直示权重最大单字", async () => {

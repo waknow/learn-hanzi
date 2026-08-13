@@ -6,13 +6,14 @@ const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 // 模型名：默认 deepseek-v4-flash（DeepSeek V4 系列，旧名 deepseek-chat 计划 2026-07-24 停用）
 // 可用环境变量 DEEPSEEK_MODEL 覆盖，如 deepseek-v4-pro
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
+// 调试开关：DEBUG_PROMPT=1 时打印完整 Prompt（默认关闭，保持生产日志干净）
+const DEBUG_PROMPT = process.env.DEBUG_PROMPT === "1";
 const MAX_RETRIES = 3;
-const MIN_USED_CHARS = 1;
-// 自评阈值：任一维度低于各自阈值则重试（模型自评容易虚高，阈值从严）
-const MIN_FLUENCY = 8; // 自然度
-const MIN_SPOKEN = 6; // 口语化
-const MIN_COMPLETE = 8; // 意思完整度
-const MIN_SCORE = 7; // 三维平均分下限（日志参考）
+// 服务端启发式校验（不依赖模型自评——模型自评会“凑分通过”，且低分重试成本高）：
+// - 最少使用字数：单字输出应走“单字直示/兜底”路径，AI 生成必须 ≥2 字
+const MIN_USED_CHARS = 2;
+// - 最大用字数：防止模型堆长句，配合“只输出一个结果”规则
+const MAX_OUTPUT_CHARS = 12;
 
 // DeepSeek 请求超时（毫秒）：上游挂起时中止请求并进入重试，避免无限占用连接。
 // 可用环境变量 DEEPSEEK_TIMEOUT_MS 覆盖（测试用）。
@@ -103,52 +104,39 @@ function log(...args: unknown[]) {
 }
 
 /** 系统提示词（不变部分，可被 DeepSeek prompt caching 缓存） */
-const SYSTEM_PROMPT = `你是一位专业幼儿老师，正在教小朋友认字，需要按照字库里的字来组成一个有趣的句子，句子内容积极、童趣、健康，禁止出现暴力、负面、辱骂、死亡等内容。
+const SYSTEM_PROMPT = `你是一位专业幼儿老师，正在教小朋友认字。请用字库里的字组成一个有趣、童趣、健康的短句或词语，贴近小朋友的日常生活（家里、幼儿园、动物、食物、天气、游戏等），像小朋友平时说话一样可爱。
 
 规则：
-- 只用下面提供的字，不能加别的字
-- 提供的词库包含权重信息，数字越大，越优先使用
-- 尽量使用权重高的字，少用权重低的字
-- 意思和通顺永远排在第一位：如果权重高的字实在组不成合理句子，宁可放弃它们改用其他字，绝不为了凑字牺牲意思
-- 输出的内容必须表达一个完整、明确的意思（谁/什么 + 做什么/怎么样），并且符合现实生活常识、描述真实存在的事情。禁止“家是圆的”“圆圆的家”这类意思荒谬、不符合常识的句子
-- 如果给定字实在组不成意思完整且符合常识的句子，宁可输出最短的合理词语（如“圆圆的”），也不要硬凑荒谬句子
-- 内容贴近小朋友的日常生活（家里、幼儿园、动物、食物、天气、游戏等），符合学龄前儿童认知
-- 倾向可爱的词句，像小朋友平时说话
-- 优先确保通顺，而不是堆字凑字。如果两三个字的词语通顺度超过长句子，优先使用词语
-- 输出的内容中最后只有一个主旨，不要堆砌多个主旨
-- 只输出一个结果（一个字、一个词、或一个短句）
-- 输出格式：结果【自然程度-口语化-完整度】，例如：小猫【自然程度-9 口语化-9 完整度-9】
-- 自然程度评分（1-10）：读起来是否自然、常用。必须>=8，如果低于8，减少句子长度
-- 口语化评分（1-10）：像不像平时说话，不要太书面化
-- 完整度评分（1-10）：意思是否完整明确、是否符合常识。必须>=8
-- 内容积极、有童趣
-- 禁止：暴力、负面、辱骂、死亡
+- 只用下面提供的可用字，不能加任何其他字
+- 权重数字越大，这个字越重要，越要优先使用；如果权重高的字实在组不成通顺句子，宁可放弃它们改用其他字
+- 意思和通顺永远排在第一位，绝不为了凑字牺牲意思
+- 必须表达一个完整、明确的意思（谁/什么 + 做什么/怎么样），符合现实生活常识，禁止“家是圆的”这类意思荒谬的内容
+- 如果实在组不成意思完整的句子，宁可输出最短的合理词语（如“圆圆的”），也不要硬凑荒谬句子
+- 优先保证通顺：两三个字的词语比长句子通顺时，优先用词语
+- 只输出一个结果（一个词或一个短句），2 到 12 个字；内容积极、有童趣，禁止暴力、负面、辱骂、死亡
+- 直接输出结果即可，不要解释、不要任何额外内容
 
-先输出结果，再输出评分，不要其他内容。`;
+输出示例（仅示意格式，示例中的字可能不在可用字里，务必只用可用字）：
+- 太阳出来了`;
 
 /** 构建用户消息（每次变化的字列表和权重） */
 function buildUserMsg(themeWeights?: string, recentShown?: string[]): string {
   const parts: string[] = [];
-  let charsOnly = "";
 
   if (themeWeights) {
     try {
       const arr: { char: string; weight: number }[] = JSON.parse(themeWeights);
+      // 内联权重：字集合 + 优先级一次给全
+      // （原实现 JSON 与纯文本两处重复同一字符集合，token 减半且信息不丢）
       arr.sort((a, b) => b.weight - a.weight);
-      const sortedJson = JSON.stringify(arr);
-      parts.push(`主题字（按weight从高到低）：${sortedJson}`);
-      charsOnly = arr.map((c) => c.char).join("");
+      parts.push(
+        `可用字（只能从这些字里选，绝不能使用任何其他字；括号内是权重，数字越大越优先）：${arr
+          .map((c) => `${c.char}(${c.weight})`)
+          .join(" ")}`,
+      );
     } catch {
-      parts.push(`主题字及权重：${themeWeights}`);
+      parts.push(`可用字及权重：${themeWeights}`);
     }
-  }
-
-  parts.push("规则：weight数值越大，表示这个字越重要，越要优先使用。");
-  // 纯文本可用字列表：模型对 JSON 中的字遵守较弱，空格分隔单字显式列出，降低越界概率
-  if (charsOnly) {
-    parts.push(
-      `可用字（只能从这些字里选，绝不能使用任何其他字）：${charsOnly.split("").join(" ")}`,
-    );
   }
 
   // 最近生成历史：避免重复输出相同内容
@@ -224,11 +212,14 @@ export async function POST(req: Request) {
       { role: "user", content: userMsg },
     ];
 
-    log(`[${requestId}] ====== DeepSeek 完整 Prompt ======`);
-    if (themeWeights) log(`[${requestId}] [权重JSON] ${themeWeights}`);
-    log(`[${requestId}] [SYSTEM]\n${SYSTEM_PROMPT}`);
-    log(`[${requestId}] [USER]\n${userMsg}`);
-    log(`[${requestId}] ====== Prompt 结束 ======`);
+    // 完整 Prompt 仅调试时打印（默认关闭，生产日志干净）
+    if (DEBUG_PROMPT) {
+      log(`[${requestId}] ====== DeepSeek 完整 Prompt ======`);
+      if (themeWeights) log(`[${requestId}] [权重JSON] ${themeWeights}`);
+      log(`[${requestId}] [SYSTEM]\n${SYSTEM_PROMPT}`);
+      log(`[${requestId}] [USER]\n${userMsg}`);
+      log(`[${requestId}] ====== Prompt 结束 ======`);
+    }
 
     // 最多重试 MAX_RETRIES 次，每次失败将原因回传给模型
     // 记录本轮已被拒绝的输出，用于检测模型固执重复
@@ -252,7 +243,8 @@ export async function POST(req: Request) {
         // V4 系列默认开启思考模式；句子生成无需推理，显式关闭以降低延迟与成本
         thinking: { type: "disabled" },
         temperature,
-        max_tokens: 300,
+        // 输出只是一个词/短句（≤12 字），200 token 足够
+        max_tokens: 200,
       };
       log(`[${requestId}] 请求模型: ${DEEPSEEK_MODEL} (thinking: disabled) 温度: ${temperature}`);
 
@@ -294,7 +286,7 @@ export async function POST(req: Request) {
             { role: "assistant", content: "" },
             {
               role: "user",
-              content: "不能输出空内容，请直接从可用字里选字输出。直接输出结果和评分，不要任何解释",
+              content: "不能输出空内容，请直接从可用字里选字输出。直接输出结果，不要任何解释",
             },
           );
           continue;
@@ -309,7 +301,7 @@ export async function POST(req: Request) {
             { role: "assistant", content: text },
             {
               role: "user",
-              content: `“${text}”这个内容已经试过了不能通过，请从可用字里换一组完全不同的字，组合成一个新的简单通顺的词或短句。直接输出结果和评分，不要解释、道歉或任何多余文字`,
+              content: `“${text}”这个内容已经试过了不能通过，请从可用字里换一组完全不同的字，组合成一个新的简单通顺的词或短句。直接输出结果，不要解释、道歉或任何多余文字`,
             },
           );
           continue;
@@ -325,7 +317,7 @@ export async function POST(req: Request) {
             {
               role: "user",
               content:
-                "输出中包含不适合儿童的内容，请重新输出一个积极健康的。直接输出结果和评分，不要任何解释",
+                "输出中包含不适合儿童的内容，请重新输出一个积极健康的。直接输出结果，不要任何解释",
             },
           );
           continue;
@@ -348,7 +340,7 @@ export async function POST(req: Request) {
             { role: "assistant", content: text },
             {
               role: "user",
-              content: `“${extraChars.join("")}”这些字不在可用字里，绝对不允许使用。可用字只有：${sortedCharsStr}。请从这些字里重新选一组完全不同的字，组合成一个简单通顺的词或短句。直接输出结果和评分，不要解释、道歉或任何多余文字`,
+              content: `“${extraChars.join("")}”这些字不在可用字里，绝对不允许使用。可用字只有：${sortedCharsStr}。请从这些字里重新选一组完全不同的字，组合成一个简单通顺的词或短句。直接输出结果，不要解释、道歉或任何多余文字`,
             },
           );
           continue;
@@ -365,7 +357,7 @@ export async function POST(req: Request) {
             { role: "assistant", content: text },
             {
               role: "user",
-              content: `至少使用 ${MIN_USED_CHARS} 个可用字，请换一组字重新输出。直接输出结果和评分，不要任何解释`,
+              content: `至少使用 ${MIN_USED_CHARS} 个可用字，请换一组字重新输出。直接输出结果，不要任何解释`,
             },
           );
           continue;
@@ -387,86 +379,44 @@ export async function POST(req: Request) {
           /* weights parse error, skip */
         }
 
-        // 检查4：提取评分并校验
-        // 正式格式：【自然程度-9 口语化-9 完整度-9】
-        // 兼容旧格式：【自然程度-9 口语化-9】和【9-8】（缺完整度视为不通过）
-        let fluencyScore = -1;
-        let spokenScore = -1;
-        let completeScore = -1;
-        let scoreMatch = text.match(/【自然程度-(\d+)\s+口语化-(\d+)\s+完整度-(\d+)】$/);
-        if (scoreMatch) {
-          fluencyScore = parseInt(scoreMatch[1], 10);
-          spokenScore = parseInt(scoreMatch[2], 10);
-          completeScore = parseInt(scoreMatch[3], 10);
-        } else {
-          // 兼容旧格式
-          scoreMatch = text.match(/【(?:自然程度-)?(\d+)\s+口语化-(\d+)】$/);
-          if (scoreMatch) {
-            fluencyScore = parseInt(scoreMatch[1], 10);
-            spokenScore = parseInt(scoreMatch[2], 10);
-          } else {
-            scoreMatch = text.match(/【(\d+)-(\d+)】$/);
-            if (scoreMatch) {
-              fluencyScore = parseInt(scoreMatch[1], 10);
-              spokenScore = parseInt(scoreMatch[2], 10);
-            }
-          }
-        }
-        const avgScore =
-          fluencyScore >= 1 && spokenScore >= 1 && completeScore >= 1
-            ? Math.round((fluencyScore + spokenScore + completeScore) / 3)
-            : -1;
-        const scoresOk =
-          fluencyScore >= MIN_FLUENCY && spokenScore >= MIN_SPOKEN && completeScore >= MIN_COMPLETE;
-        log(
-          `[${requestId}] 检查4 - 自评: 自然${fluencyScore} 口语${spokenScore} 完整${completeScore} 平均${avgScore} ${scoresOk ? "✅" : "❌ 未达阈值"}`,
-        );
-
-        if (scoresOk) {
-          // 移除评分后缀，只返回纯文本（兼容三种格式后缀）
-          const cleanText = text.replace(/【[^】]+】$/, "").trim();
-
-          // 检查5：与最近生成历史重复（硬拦截，模型无视软约束时兜底）
-          if (recentShown.includes(cleanText)) {
-            log(`[${requestId}] 检查5 - 与最近历史重复: ❌ "${cleanText}"`);
-            messages.push(
-              { role: "assistant", content: text },
-              {
-                role: "user",
-                content: `“${cleanText}”这个句子最近已经生成过了，请换一个完全不同的词或短句。直接输出结果和评分，不要任何解释`,
-              },
-            );
-            continue;
-          }
-
-          recordShown(bankId, cleanText);
-          log(`[${requestId}] ✅✅✅ 全部检查通过！返回句子: "${cleanText}"`);
-          log(`[${requestId}] 使用汉字:`, usedChars);
-          return NextResponse.json({
-            text: cleanText,
-            usedChars,
-            extraChars: [],
-            isFallback: false,
-          });
-        } else {
-          // 评分过低、格式不对或缺维度，回传要求改进
-          let reason: string;
-          if (!scoreMatch) {
-            reason =
-              "输出格式不对，请在结果后面加上【自然程度-口语化-完整度】评分，例如：小猫【自然程度-9 口语化-9 完整度-9】";
-          } else if (completeScore < 0) {
-            reason = "缺少意思完整度评分，请按【自然程度-X 口语化-X 完整度-X】格式重新输出";
-          } else if (fluencyScore < MIN_FLUENCY || completeScore < MIN_COMPLETE) {
-            reason = `当前评分过低（自然${fluencyScore} 口语${spokenScore} 完整${completeScore}），句子必须意思完整、符合常识、自然通顺，请重新输出`;
-          } else {
-            reason = `口语化评分偏低（${spokenScore}），请像小朋友平时说话一样重新输出`;
-          }
+        // 检查4：最大长度（服务端启发式，防止模型堆长句）
+        if (usedChars.length > MAX_OUTPUT_CHARS) {
+          log(
+            `[${requestId}] 检查4 - 最大长度: ❌ 用字 ${usedChars.length} 个 > ${MAX_OUTPUT_CHARS} 个`,
+          );
           messages.push(
             { role: "assistant", content: text },
-            { role: "user", content: `${reason}。另外请换一个与之前不同的内容` },
+            {
+              role: "user",
+              content: `“${textBody}”太长了，请缩短到 ${MAX_OUTPUT_CHARS} 个字以内，输出一个简短通顺的词或短句。直接输出结果，不要任何解释`,
+            },
           );
           continue;
         }
+
+        // 检查5：与最近生成历史重复（硬拦截，模型无视软约束时兜底）
+        const cleanText = textBody.trim();
+        if (recentShown.includes(cleanText)) {
+          log(`[${requestId}] 检查5 - 与最近历史重复: ❌ "${cleanText}"`);
+          messages.push(
+            { role: "assistant", content: text },
+            {
+              role: "user",
+              content: `“${cleanText}”这个句子最近已经生成过了，请换一个完全不同的词或短句。直接输出结果，不要任何解释`,
+            },
+          );
+          continue;
+        }
+
+        recordShown(bankId, cleanText);
+        log(`[${requestId}] ✅✅✅ 全部检查通过！返回句子: "${cleanText}"`);
+        log(`[${requestId}] 使用汉字:`, usedChars);
+        return NextResponse.json({
+          text: cleanText,
+          usedChars,
+          extraChars: [],
+          isFallback: false,
+        });
       } catch (err) {
         const aborted = err instanceof Error && err.name === "AbortError";
         if (aborted) {
