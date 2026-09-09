@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useSound } from "@/hooks/useSound";
+
+/** 「再来一句」按钮延迟出现的毫秒数（避免小朋友抢点，先读完句子） */
+export const REGENERATE_DELAY_MS = 800;
 
 interface ResultStateProps {
   text: string;
@@ -32,11 +35,12 @@ export default function ResultState({
   const { speak, play } = useSound();
   const [showButton, setShowButton] = useState(false);
 
-  // 延迟显示按钮
-  useState(() => {
-    const timer = setTimeout(() => setShowButton(true), 800);
+  // 延迟显示按钮（原来是 useState 当 effect 用：初始化器返回的 cleanup 被 React 忽略，
+  // 且返回值被当成 state 直接是"真值"，导致延迟失效 + 定时器卸载后仍在跑）
+  useEffect(() => {
+    const timer = setTimeout(() => setShowButton(true), REGENERATE_DELAY_MS);
     return () => clearTimeout(timer);
-  });
+  }, []);
 
   // 拆成字符用于逐字动画
   const chars = text.split("");
@@ -157,7 +161,7 @@ export default function ResultState({
         )
       )}
 
-      {/* 再来一句按钮 */}
+      {/* 再来一句按钮：延迟出现（防抢点）。占位始终存在，避免 800ms 后布局跳动 */}
       <motion.div
         initial={{ y: 60, opacity: 0 }}
         animate={showButton ? { y: 0, opacity: 1 } : {}}
@@ -166,9 +170,13 @@ export default function ResultState({
       >
         <button
           onClick={onRegenerate}
+          disabled={!showButton}
+          aria-hidden={!showButton}
+          tabIndex={showButton ? 0 : -1}
+          data-testid="regenerate-button"
           className="px-10 py-4 bg-gradient-to-r from-candy-teal to-candy-sky
                      text-white text-xl font-cartoon rounded-full shadow-lg
-                     active:scale-95 transition-transform"
+                     active:scale-95 transition-transform disabled:opacity-0"
         >
           🔁 再来一句
         </button>

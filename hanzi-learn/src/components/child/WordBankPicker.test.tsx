@@ -40,6 +40,16 @@ describe("WordBankPicker", () => {
     expect(screen.queryByText("二级")).not.toBeInTheDocument();
   });
 
+  it("点击打印按钮跳转打印页，且不触发进入句子页", async () => {
+    render(<WordBankPicker />);
+    await screen.findByText("一级");
+
+    fireEvent.click(screen.getByLabelText("打印一级字卡"));
+
+    expect(pushMock).toHaveBeenCalledWith("/print?bank=level1");
+    expect(pushMock).not.toHaveBeenCalledWith("/child/sentence?bank=level1");
+  });
+
   it("没有可用字库时显示空态提示", async () => {
     saveConfig({ password: "1234", enabledBanks: ["nope"], customBanks: [] });
     render(<WordBankPicker />);

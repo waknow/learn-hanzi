@@ -95,48 +95,50 @@ export default function WordBankPicker() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-2xl mx-auto w-full">
         {banks.map((bank, i) => (
-          <motion.button
-            key={bank.id}
-            initial={{ y: 60, opacity: 0, scale: 0.8 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            transition={{
-              delay: i * 0.05,
-              type: "spring",
-              stiffness: 300,
-              damping: 15,
-            }}
-            whileTap={{ scale: 0.92 }}
-            whileHover={{ scale: 1.03 }}
-            onClick={() => handleSelect(bank.id)}
-            className={`
-              aspect-square rounded-3xl relative
-              bg-gradient-to-br ${CARD_COLORS[i % CARD_COLORS.length]}
-              shadow-lg flex flex-col items-center justify-center gap-2
-              active:shadow-md transition-shadow
-            `}
-          >
-            <div
-              className={`w-16 h-16 rounded-2xl ${EMOJI_BG[i % EMOJI_BG.length]} 
-                          flex items-center justify-center text-3xl`}
+          // 外层 div 承载定位：打印按钮是卡片按钮的兄弟节点。
+          // ⚠️ 不能把 <button> 嵌在 <button> 里（非法 HTML，浏览器会重排 DOM 导致点击区域错乱）。
+          <div key={bank.id} className="relative">
+            <motion.button
+              initial={{ y: 60, opacity: 0, scale: 0.8 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              transition={{
+                delay: i * 0.05,
+                type: "spring",
+                stiffness: 300,
+                damping: 15,
+              }}
+              whileTap={{ scale: 0.92 }}
+              whileHover={{ scale: 1.03 }}
+              onClick={() => handleSelect(bank.id)}
+              className={`
+                w-full aspect-square rounded-3xl
+                bg-gradient-to-br ${CARD_COLORS[i % CARD_COLORS.length]}
+                shadow-lg flex flex-col items-center justify-center gap-2
+                active:shadow-md transition-shadow
+              `}
             >
-              {bank.emoji}
-            </div>
-            <span className="text-lg font-cartoon text-gray-700">{bank.name}</span>
+              <div
+                className={`w-16 h-16 rounded-2xl ${EMOJI_BG[i % EMOJI_BG.length]} 
+                            flex items-center justify-center text-3xl`}
+              >
+                {bank.emoji}
+              </div>
+              <span className="text-lg font-cartoon text-gray-700">{bank.name}</span>
+            </motion.button>
+
             {bank.chars.length > 0 && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/print?bank=${bank.id}`);
-                }}
-                className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-white/70
+                onClick={() => router.push(`/print?bank=${bank.id}`)}
+                className="absolute bottom-2 right-2 z-10 w-7 h-7 rounded-full bg-white/70
                            flex items-center justify-center text-xs shadow-sm
                            active:scale-90 transition-transform"
+                aria-label={`打印${bank.name}字卡`}
                 title="打印字卡"
               >
                 🖨️
               </button>
             )}
-          </motion.button>
+          </div>
         ))}
 
         {/* 综合 — 所有字库合并 */}

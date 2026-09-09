@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { BUILT_IN_BANKS } from "@/lib/wordBanks";
-import { loadConfig, saveConfig, saveWeightData, loadWeightData, saveStats } from "@/lib/storage";
+import { loadConfig, saveConfig, saveWeightData, saveStats } from "@/lib/storage";
 import ModelSelector from "@/components/parent/ModelSelector";
 import type { ParentConfig, WordBank } from "@/lib/types";
 
@@ -26,22 +26,33 @@ export default function SettingsPage() {
     setConfig(loadConfig());
   }, []);
 
-  const refresh = useCallback(() => {
-    setConfig(loadConfig());
-  }, []);
+  // 全部字库 id（内置 + 自定义）：用于「全部启用」（enabledBanks 为空数组）的展开
+  const allBankIds = useMemo(
+    () => [...BUILT_IN_BANKS.map((b) => b.id), ...(config?.customBanks ?? []).map((b) => b.id)],
+    [config?.customBanks],
+  );
 
   if (!config) return null;
 
+  /** 写入新配置（不可变更新，state 即唯一真相，无需回读 localStorage） */
+  const commit = (next: ParentConfig) => {
+    setConfig(next);
+    saveConfig(next);
+  };
+
   // 切换启用/禁用
+  // ⚠️ enabledBanks 为空数组 = 全部启用（约定）。此时点击某张卡片的语义是
+  // 「只禁用这一个」：必须先把空数组展开成全部 id 再移除，否则会把其他字库全部关掉。
   const toggleBank = (id: string) => {
-    const idx = config.enabledBanks.indexOf(id);
-    if (idx >= 0) {
-      config.enabledBanks.splice(idx, 1);
-    } else {
-      config.enabledBanks.push(id);
-    }
-    saveConfig(config);
-    refresh();
+    const current = config.enabledBanks;
+    const next =
+      current.length === 0
+        ? allBankIds.filter((bankId) => bankId !== id)
+        : current.includes(id)
+          ? current.filter((bankId) => bankId !== id)
+          : [...current, id];
+    // 又变回「全部启用」时归一化为空数组，避免 id 列表与约定漂移
+    commit({ ...config, enabledBanks: next.length === allBankIds.length ? [] : next });
   };
 
   // 重置权重
@@ -95,11 +106,13 @@ export default function SettingsPage() {
     }
 
     if (editBank) {
-      // 编辑
-      const idx = config.customBanks.findIndex((b) => b.id === editBank.id);
-      if (idx >= 0) {
-        config.customBanks[idx] = { ...editBank, name: editName, emoji: editEmoji, chars };
-      }
+      // 编辑（不可变更新）
+      commit({
+        ...config,
+        customBanks: config.customBanks.map((b) =>
+          b.id === editBank.id ? { ...b, name: editName, emoji: editEmoji, chars } : b,
+        ),
+      });
     } else {
       // 新增
       const newBank: WordBank = {
@@ -108,20 +121,21 @@ export default function SettingsPage() {
         emoji: editEmoji,
         chars,
       };
-      config.customBanks.push(newBank);
+      commit({ ...config, customBanks: [...config.customBanks, newBank] });
     }
 
-    saveConfig(config);
     setShowCustomEditor(false);
-    refresh();
   };
 
   // 删除自定义字库
   const deleteCustom = (id: string) => {
     if (!confirm("确定要删除这个自定义字库吗？")) return;
-    config.customBanks = config.customBanks.filter((b) => b.id !== id);
-    saveConfig(config);
-    refresh();
+    commit({
+      ...config,
+      customBanks: config.customBanks.filter((b) => b.id !== id),
+      // 同步清理启用列表，避免残留已删除的 id
+      enabledBanks: config.enabledBanks.filter((bankId) => bankId !== id),
+    });
   };
 
   // 修改密码
@@ -138,8 +152,7 @@ export default function SettingsPage() {
       alert("两次密码不一致");
       return;
     }
-    config.password = newPwd;
-    saveConfig(config);
+    commit({ ...config, password: newPwd });
     setPasswordModal(false);
     setOldPwd("");
     setNewPwd("");
