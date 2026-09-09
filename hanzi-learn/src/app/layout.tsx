@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-page-custom-font -- 该规则仅针对 Pages Router 的 pages/_document.js；App Router 根布局手写 <link> 是有效且全站生效的做法，故 disable */
 import type { Metadata, Viewport } from "next";
 import StateSync from "@/components/shared/StateSync";
+import VersionBadge from "@/components/shared/VersionBadge";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -46,6 +47,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen">
         <StateSync />
         {children}
+        {/* 角落版本徽标（全站；极小字号、不拦截触摸，打印时隐藏） */}
+        <VersionBadge />
       </body>
     </html>
   );

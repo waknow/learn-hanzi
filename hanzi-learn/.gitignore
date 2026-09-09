@@ -37,3 +37,6 @@ next-env.d.ts
 /hanzi-learn-image.tar
 /hanzi-learn-image-*.tar
 /data/
+
+# 构建产物（由 Dockerfile 按 APP_VERSION/GIT_COMMIT 生成）
+/public/version.json

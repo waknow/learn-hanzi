@@ -126,6 +126,7 @@ hanzi-learn/
 │   │   │   └── ModelSelector.tsx       # AI 模型选择卡片
 │   │   └── shared/
 │   │       ├── PasswordGate.tsx        # 密码验证组件
+│   │       ├── VersionBadge.tsx        # 角落版本徽标（全站）
 │   │       └── ParticleBg.tsx          # 粒子背景
 │   ├── hooks/
 │   │   ├── useWeightEngine.ts          # 权重引擎 Hook
@@ -143,6 +144,7 @@ hanzi-learn/
 │       ├── frequency.ts                # 字频分级（Tier 1~3）
 │       ├── soundEngine.ts              # Web Audio API 音效引擎
 │       ├── modelCatalog.ts             # DeepSeek 模型目录（元数据/解析规则）
+│       ├── version.ts                  # 版本信息解析（构建期注入 → package.json）
 │       ├── storage.ts                  # localStorage 封装
 │       └── server/
 │           ├── modelStore.ts           # 模型自动获取 + 缓存 + 选择持久化
@@ -204,8 +206,18 @@ hanzi-learn/
 | `DEEPSEEK_TIMEOUT_MS` | 否 | 句子生成请求超时，默认 `12000` |
 | `DEEPSEEK_RETRY_BASE_MS` | 否 | 重试指数退避基数，默认 `500` |
 | `STATE_FILE` | 否 | 服务端状态文件路径，默认 `data/state.json`（Docker 下为 `/app/data/state.json`） |
+| `APP_VERSION` | 否 | 构建期注入的版本号，页面左下角版本徽标显示；本地默认取 package.json |
+| `GIT_COMMIT` | 否 | 构建期注入的 git 短哈希，随版本徽标显示（如 `v1.1.0 · 5629311`） |
 
 环境变量文件位于 `hanzi-learn/env`，Docker 容器通过挂载此文件注入。
+
+## 版本信息展示
+
+页面左下角固定显示版本徽标（如 `v1.1.0 · 5629311`）：
+
+- 版本号来源优先级：构建期 `APP_VERSION` → `package.json` → `dev`
+- Docker 构建由 `scripts/build.sh` 传入版本与 commit（同时写入 `public/version.json`）
+- 徽标极小字号、低透明度、`pointer-events-none`（不拦截触摸），打印时自动隐藏
 
 ## iPad 全屏使用
 

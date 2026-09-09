@@ -19,7 +19,21 @@ if (result.error) {
   }
 }
 
+// ===== 版本信息注入 =====
+// Docker 构建由 scripts/build.sh 传入 APP_VERSION / GIT_COMMIT；
+// 本地开发回退 package.json 版本（见 src/lib/version.ts）。
+// 写入 env 后，客户端组件可用 process.env.APP_VERSION 读到（构建期内联）。
+const pkg = require("./package.json");
+const APP_VERSION = process.env.APP_VERSION || pkg.version;
+const GIT_COMMIT = process.env.GIT_COMMIT || "";
+console.log(`[version] 🏷️  ${APP_VERSION}${GIT_COMMIT ? ` (${GIT_COMMIT})` : ""}`);
+
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  env: {
+    APP_VERSION,
+    GIT_COMMIT,
+  },
+};
 
 module.exports = nextConfig;

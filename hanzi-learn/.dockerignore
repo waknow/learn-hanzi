@@ -10,3 +10,5 @@ env
 .env
 .env*.local
 data
+# 构建产物：由 Dockerfile 按传入的 APP_VERSION/GIT_COMMIT 重新生成
+public/version.json

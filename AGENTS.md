@@ -118,6 +118,13 @@ npm run docker:build # Docker 构建（含代理 + tar 导出）
 
 家长入口通过 4 位数字密码鉴权（`PasswordGate`），首次使用引导设置。
 
+### 版本徽标（`lib/version.ts` + `components/shared/VersionBadge.tsx`）
+
+- 根布局左下角固定展示版本（如 `v1.1.0 · 5629311`），全站生效、打印隐藏
+- 版本来源：构建期 `APP_VERSION` → package.json → `dev`；`GIT_COMMIT` 为 git 短哈希
+- 注入方式：`next.config.js` 的 `env` 字段（Docker 由 `scripts/build.sh` 传入）；
+  改动注入逻辑后必须重新 build 才会生效
+
 ## Coding conventions
 
 1. **中文注释**：本项目的注释使用中文，新代码保持一致。

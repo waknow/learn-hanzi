@@ -13,7 +13,10 @@ RUN npm ci
 
 # 2. 复制源码并构建
 COPY . .
-# 将版本信息写入 public/version.json，应用可读取展示
+# 版本信息同时注入构建期环境变量（next.config.js → 页面角落版本徽标）
+ENV APP_VERSION="${APP_VERSION}"
+ENV GIT_COMMIT="${GIT_COMMIT}"
+# 同时写入 public/version.json，便于直接 curl 查看运行中镜像的版本
 RUN echo "{\"version\":\"${APP_VERSION}\",\"commit\":\"${GIT_COMMIT}\"}" > public/version.json
 RUN npm run build
 
