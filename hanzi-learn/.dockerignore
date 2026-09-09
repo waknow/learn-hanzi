@@ -12,3 +12,6 @@ env
 data
 # 构建产物：由 Dockerfile 按传入的 APP_VERSION/GIT_COMMIT 重新生成
 public/version.json
+# 导出的镜像 tar（单个约 200MB）与覆盖率报告：不进入构建上下文
+hanzi-learn-image*.tar
+coverage
