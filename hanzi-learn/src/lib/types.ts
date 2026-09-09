@@ -42,6 +42,8 @@ export interface GenerateResponse {
   usedChars: string[];
   extraChars: string[];
   isFallback: boolean;
+  /** 实际使用的模型 id（服务端解析后的结果，便于排查） */
+  model?: string;
 }
 
 /** 学习统计 */
@@ -67,4 +69,6 @@ export interface ParentConfig {
   enabledBanks: string[];
   customBanks: WordBank[];
   bankHelpers?: Record<string, boolean>; // bankId → useHelpers(true/false)
+  /** 家长手动选定的 DeepSeek 模型 id；空串/缺省 = 自动（env → 内置默认） */
+  model?: string;
 }

@@ -128,6 +128,8 @@ export function loadConfig(): ParentConfig {
     password: "1234",
     enabledBanks: [],
     customBanks: [],
+    // 空串 = 自动选择模型（服务端按 DEEPSEEK_MODEL → 内置默认解析）
+    model: "",
   });
 }
 

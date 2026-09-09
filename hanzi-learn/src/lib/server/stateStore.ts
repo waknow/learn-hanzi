@@ -36,6 +36,8 @@ const DEFAULT_CONFIG: ParentConfig = {
   password: "1234",
   enabledBanks: [],
   customBanks: [],
+  // 空串 = 自动选择模型（env DEEPSEEK_MODEL → 内置默认）
+  model: "",
 };
 
 export function getStateFilePath(): string {

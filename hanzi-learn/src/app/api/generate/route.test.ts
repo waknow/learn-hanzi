@@ -10,14 +10,21 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { POST } from "./route";
+import { readState, writeState } from "@/lib/server/stateStore";
+import { clearModelCache } from "@/lib/server/modelStore";
+import { DEFAULT_MODEL } from "@/lib/modelCatalog";
 
 let tmpDir: string;
 beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  clearModelCache();
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hanzi-api-gen-"));
   vi.stubEnv("STATE_FILE", path.join(tmpDir, "state.json"));
   // 默认关闭重试退避，保持重试用例快速；专门的退避用例会单独覆盖
   vi.stubEnv("DEEPSEEK_RETRY_BASE_MS", "0");
+  // 默认无环境变量模型，走内置默认；模型相关用例单独覆盖
+  vi.stubEnv("DEEPSEEK_MODEL", "");
 });
 
 /** 挂起直到 signal 中止的 fetch（模拟 DeepSeek 超时场景） */
@@ -242,5 +249,75 @@ describe("POST /api/generate", () => {
     const body = await res.json();
     expect(body.isFallback).toBe(true);
     expect(body.text).toBe("猫");
+  });
+
+  it("未选择模型时使用内置默认模型，并在响应中回传 model", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
+    const chatBodies: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/chat/completions")) chatBodies.push(String(init?.body));
+      return aiResponse(GOOD);
+    });
+    vi.stubGlobal("fetch", fetchMock as never);
+
+    const res = await POST(makeReq({ bankId: "bank-model-1", sortedChars: "小猫" }));
+    const body = await res.json();
+    expect(body.model).toBe(DEFAULT_MODEL);
+    expect((JSON.parse(chatBodies[0]) as { model: string }).model).toBe(DEFAULT_MODEL);
+  });
+
+  it("环境变量 DEEPSEEK_MODEL 优先于内置默认", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
+    vi.stubEnv("DEEPSEEK_MODEL", "deepseek-v4-pro");
+    const fetchMock = vi.fn().mockResolvedValue(aiResponse(GOOD));
+    vi.stubGlobal("fetch", fetchMock as never);
+
+    const res = await POST(makeReq({ bankId: "bank-model-2", sortedChars: "小猫" }));
+    const body = await res.json();
+    expect(body.model).toBe("deepseek-v4-pro");
+  });
+
+  it("家长手动选择的模型生效（每次请求读取最新选择）", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
+    writeState({ config: { ...readState().config, model: "deepseek-v4-pro" } });
+
+    const chatBodies: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      // 手动选择时先校验模型是否在账号可用列表中
+      if (String(url).endsWith("/models")) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "deepseek-v4-pro" }, { id: "deepseek-v4-flash" }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      chatBodies.push(String(init?.body));
+      return aiResponse(GOOD);
+    });
+    vi.stubGlobal("fetch", fetchMock as never);
+
+    const res = await POST(makeReq({ bankId: "bank-model-3", sortedChars: "小猫" }));
+    const body = await res.json();
+    expect(body.model).toBe("deepseek-v4-pro");
+    expect((JSON.parse(chatBodies[0]) as { model: string }).model).toBe("deepseek-v4-pro");
+  });
+
+  it("手动选择的模型已下线时回退内置默认", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "sk-test");
+    writeState({ config: { ...readState().config, model: "deepseek-retired" } });
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).endsWith("/models")) {
+        return new Response(JSON.stringify({ data: [{ id: "deepseek-v4-flash" }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return aiResponse(GOOD);
+    });
+    vi.stubGlobal("fetch", fetchMock as never);
+
+    const res = await POST(makeReq({ bankId: "bank-model-4", sortedChars: "小猫" }));
+    const body = await res.json();
+    expect(body.model).toBe("deepseek-v4-flash");
   });
 });

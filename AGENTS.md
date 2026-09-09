@@ -46,6 +46,7 @@ learn-hanzi/               # Git 仓库根（本文件所在目录）
 | 动画 | Framer Motion 11 |
 | 图表 | Recharts 2 |
 | AI | DeepSeek Chat API（可选；无 Key 时 fallback 内置句池） |
+| 模型选择 | `GET /api/model` 自动获取账号可用模型 + 家长手动切换（持久化到 state.json） |
 | 音效 | Web Audio API（程序化生成，零外部资源加载） |
 | 语音 | Web Speech API (TTS) |
 | 存储 | localStorage（统计、权重、配置） |
@@ -81,6 +82,16 @@ npm run docker:build # Docker 构建（含代理 + tar 导出）
 3. DeepSeek 生成 → 4. 服务端校验链（敏感词、越界字、最少字数 2 字、
    最大长度 12 字、历史去重；不依赖模型自评）→ 5. 通过即返回，失败最多重试 3 次
    （超时 12s + 指数退避）→ 6. 全部失败时挑选权重最大的字直接显示单字
+
+### AI 模型选择（`lib/modelCatalog.ts` + `lib/server/modelStore.ts`）
+
+- 模型名解析优先级：家长手动选择 → `DEEPSEEK_MODEL` → 内置默认 `deepseek-v4-flash`
+- `GET /api/model` 用 API Key 调 `https://api.deepseek.com/models` 自动获取账号可用模型，
+  结果缓存 10 分钟并合并在途请求（`DEEPSEEK_MODEL_CACHE_MS` 可调）
+- 家长在设置页点击切换 → `PUT /api/model` 写入 `data/state.json` 的 `config.model`；
+  空串 = 自动。generate 路由每次请求重新解析，切换无需重启
+- 无 Key / 上游异常 → 展示内置兜底目录并提示，不阻塞设置页；
+  手动选择的模型已下线时 generate 回退默认模型
 
 ### 加权随机算法（`lib/weightEngine.ts`）
 
@@ -118,7 +129,8 @@ npm run docker:build # Docker 构建（含代理 + tar 导出）
 6. **无外部音频/图片**：音效用 Web Audio API 程序化生成，不引入 mp3/wav 等资源。
 7. **环境变量**：`DEEPSEEK_API_KEY` 通过 `hanzi-learn/env` 文件注入，
    不写在 `.env` 或代码中。Docker 通过 `-v` 挂载。
-8. **API 路由**：仅在 `src/app/api/generate/route.ts` 存在，保持单一 API 端点。
+8. **API 路由**：保持精简，当前为 `api/generate`（句子生成）、`api/model`（模型列表与切换）、
+   `api/state`（服务端状态同步）；新增路由前先考虑能否并入既有端点。
 
 ## 测试与质量
 

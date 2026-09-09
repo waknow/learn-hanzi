@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { BUILT_IN_BANKS } from "@/lib/wordBanks";
 import { loadConfig, saveConfig, saveWeightData, loadWeightData, saveStats } from "@/lib/storage";
+import ModelSelector from "@/components/parent/ModelSelector";
 import type { ParentConfig, WordBank } from "@/lib/types";
 
 /** 设置管理页 */
@@ -158,6 +159,15 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-cartoon text-gray-700">⚙️ 字库管理</h1>
         <div className="w-8" />
       </div>
+
+      {/* AI 模型（自动获取 + 手动切换） */}
+      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-gray-500 font-cartoon">🤖 AI 模型</h2>
+          <span className="text-xs text-gray-300">切换后下次生成即生效</span>
+        </div>
+        <ModelSelector />
+      </motion.div>
 
       {/* 已启用 */}
       <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mb-6">

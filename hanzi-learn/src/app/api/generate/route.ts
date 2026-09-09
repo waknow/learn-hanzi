@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { findExtraChars, findUsedChars, hasSensitiveContent } from "@/lib/validator";
 import { readState } from "@/lib/server/stateStore";
+import { getEffectiveModel, isModelAvailable } from "@/lib/server/modelStore";
+import { DEFAULT_MODEL } from "@/lib/modelCatalog";
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-// 模型名：默认 deepseek-v4-flash（DeepSeek V4 系列，旧名 deepseek-chat 计划 2026-07-24 停用）
-// 可用环境变量 DEEPSEEK_MODEL 覆盖，如 deepseek-v4-pro
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
+// 模型名解析优先级（见 lib/modelCatalog.ts）：
+//   1. 家长在设置页手动选定的模型（持久化在 data/state.json 的 config.model）
+//   2. 环境变量 DEEPSEEK_MODEL（如 deepseek-v4-pro）
+//   3. 内置默认 DEFAULT_MODEL（deepseek-v4-flash）
+// 每次请求都重新解析，家长切换后无需重启服务。
 // 调试开关：DEBUG_PROMPT=1 时打印完整 Prompt（默认关闭，保持生产日志干净）
 const DEBUG_PROMPT = process.env.DEBUG_PROMPT === "1";
 const MAX_RETRIES = 3;
@@ -179,6 +183,16 @@ export async function POST(req: Request) {
     const allowedSet = new Set<string>(sortedCharsStr.split(""));
     const apiKey = process.env.DEEPSEEK_API_KEY;
 
+    // 解析本次请求使用的模型（家长手动选择 → env → 默认）
+    const { model: resolvedModel, source: modelSource } = getEffectiveModel();
+    let model = resolvedModel;
+    // 手动选定的模型若已从账号下线，回退到默认模型并记录，避免整条链路失败
+    if (modelSource === "manual" && !(await isModelAvailable(model))) {
+      log(`[${requestId}] ⚠️ 手动选择的模型 ${model} 不在可用列表中，回退 ${DEFAULT_MODEL}`);
+      model = DEFAULT_MODEL;
+    }
+    log(`[${requestId}] 使用模型: ${model} (来源: ${modelSource})`);
+
     // 检查 API Key
     log(`[${requestId}] API Key 状态:`, {
       exists: !!apiKey,
@@ -238,7 +252,7 @@ export async function POST(req: Request) {
       // 重试时逐步提高随机性，打破模型重复输出同一内容的僵局
       const temperature = [0.4, 0.7, 1.0][attempt] ?? 1.0;
       const requestBody = {
-        model: DEEPSEEK_MODEL,
+        model,
         messages,
         // V4 系列默认开启思考模式；句子生成无需推理，显式关闭以降低延迟与成本
         thinking: { type: "disabled" },
@@ -246,7 +260,7 @@ export async function POST(req: Request) {
         // 输出只是一个词/短句（≤12 字），200 token 足够
         max_tokens: 200,
       };
-      log(`[${requestId}] 请求模型: ${DEEPSEEK_MODEL} (thinking: disabled) 温度: ${temperature}`);
+      log(`[${requestId}] 请求模型: ${model} (thinking: disabled) 温度: ${temperature}`);
 
       // 超时控制：DeepSeek 挂起时中止请求并进入重试，不会无限占用连接
       const controller = new AbortController();
@@ -416,6 +430,7 @@ export async function POST(req: Request) {
           usedChars,
           extraChars: [],
           isFallback: false,
+          model,
         });
       } catch (err) {
         const aborted = err instanceof Error && err.name === "AbortError";

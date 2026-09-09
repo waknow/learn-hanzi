@@ -53,6 +53,7 @@ npm run typecheck    # TypeScript 类型检查
 | 密码验证 | 4 位数字键盘，首次使用引导设置 |
 | 统计看板 | 学习次数、各字使用频率柱状图、本周日历、最近句子 |
 | 字库管理 | 启用/禁用字库、自定义字库、权重重置、密码修改 |
+| AI 模型 | 自动获取账号可用 DeepSeek 模型，家长可手动切换（或保持「自动」） |
 
 ### 🖨️ 字卡打印
 
@@ -109,7 +110,10 @@ hanzi-learn/
 │   │   │   ├── dashboard/page.tsx      # 统计看板
 │   │   │   └── settings/page.tsx       # 字库管理
 │   │   ├── print/page.tsx              # 🖨️ 字卡打印页
-│   │   └── api/generate/route.ts       # DeepSeek 代理 + 验证
+│   │   └── api/
+│   │       ├── generate/route.ts       # DeepSeek 代理 + 验证
+│   │       ├── model/route.ts          # 模型列表获取 + 家长切换
+│   │       └── state/route.ts          # 服务端状态读写
 │   ├── components/
 │   │   ├── child/
 │   │   │   ├── IdleState.tsx           # 待机态（大按钮）
@@ -119,6 +123,7 @@ hanzi-learn/
 │   │   │   ├── PrintCards.tsx          # 字卡打印组件
 │   │   │   └── BackButton.tsx          # 返回按钮
 │   │   ├── parent/
+│   │   │   └── ModelSelector.tsx       # AI 模型选择卡片
 │   │   └── shared/
 │   │       ├── PasswordGate.tsx        # 密码验证组件
 │   │       └── ParticleBg.tsx          # 粒子背景
@@ -137,7 +142,11 @@ hanzi-learn/
 │       ├── colors.ts                   # 染色系统（24 色配色）
 │       ├── frequency.ts                # 字频分级（Tier 1~3）
 │       ├── soundEngine.ts              # Web Audio API 音效引擎
-│       └── storage.ts                  # localStorage 封装
+│       ├── modelCatalog.ts             # DeepSeek 模型目录（元数据/解析规则）
+│       ├── storage.ts                  # localStorage 封装
+│       └── server/
+│           ├── modelStore.ts           # 模型自动获取 + 缓存 + 选择持久化
+│           └── stateStore.ts           # 服务端状态文件（data/state.json）
 ├── public/
 │   └── manifest.json                   # PWA manifest
 ├── scripts/
@@ -167,12 +176,33 @@ hanzi-learn/
 
 服务端用**启发式校验链**把关输出（敏感词、越界字、字数上下限、历史去重），不依赖模型自评（自评容易"凑分通过"且低分重试成本高）。
 
+## AI 模型自动获取与切换
+
+模型名不再写死，按以下优先级解析（每次生成请求都重新解析，切换后无需重启服务）：
+
+```
+家长手动选择（家长设置页） → 环境变量 DEEPSEEK_MODEL → 内置默认 deepseek-v4-flash
+```
+
+- **自动获取**：家长设置页打开时调用 `GET /api/model`，服务端用 `DEEPSEEK_API_KEY`
+  请求 `https://api.deepseek.com/models`，返回账号真实可用模型（含上下文长度与用途说明）。
+  结果缓存 10 分钟并合并在途请求，避免反复打上游。
+- **手动切换**：点击某个模型 → `PUT /api/model` 持久化到 `data/state.json` 的
+  `config.model`，同时写入浏览器 localStorage（家长配置随状态同步）。
+  选择「自动」即清空该值，回到 env/默认。
+- **降级不阻塞**：无 API Key 或上游异常时展示内置兜底目录并提示原因，
+  页面仍可操作；家长手动选择的模型若已下线，生成时自动回退默认模型并记录日志。
+
 ## 环境变量
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `DEEPSEEK_API_KEY` | 否 | DeepSeek API 密钥。不填则直示权重最大的单字 |
-| `DEEPSEEK_MODEL` | 否 | 生成模型名，默认 `deepseek-v4-flash`，可切换为 `deepseek-v4-pro` |
+| `DEEPSEEK_API_KEY` | 否 | DeepSeek API 密钥。不填则直示权重最大的单字，且无法自动获取模型列表 |
+| `DEEPSEEK_MODEL` | 否 | 默认模型名（家长未手动选择时生效），默认 `deepseek-v4-flash` |
+| `DEEPSEEK_MODEL_CACHE_MS` | 否 | 模型列表缓存时长，默认 `600000`（10 分钟） |
+| `DEEPSEEK_MODEL_TIMEOUT_MS` | 否 | 获取模型列表的超时，默认 `8000` |
+| `DEEPSEEK_TIMEOUT_MS` | 否 | 句子生成请求超时，默认 `12000` |
+| `DEEPSEEK_RETRY_BASE_MS` | 否 | 重试指数退避基数，默认 `500` |
 | `STATE_FILE` | 否 | 服务端状态文件路径，默认 `data/state.json`（Docker 下为 `/app/data/state.json`） |
 
 环境变量文件位于 `hanzi-learn/env`，Docker 容器通过挂载此文件注入。
