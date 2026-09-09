@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { weightedShuffle, updateWeights, initCharEntries, MAX_WEIGHT } from "@/lib/weightEngine";
 import { loadWeightData, saveWeightData } from "@/lib/storage";
+import { debugLog } from "@/lib/debug";
 import type { CharEntry } from "@/lib/types";
 
 /** 单字直示节流间隔（轮）：每 DIRECT_SHOW_GAP 轮最多直示一次 */
@@ -24,7 +25,7 @@ export function useWeightEngine(bankId: string, bankChars: string[]) {
       const currentChars = bankData.chars.map((c) => c.char).join("");
       const expectedChars = bankChars.join("");
       if (currentChars !== expectedChars) {
-        console.log(`[weightEngine] 字库 ${bankId} 内容已变化，重新初始化`);
+        debugLog("weightEngine", `字库 ${bankId} 内容已变化，重新初始化`);
         const fresh: { round: number; chars: CharEntry[]; lastDirectShowRound?: number } = {
           round: 0,
           chars: initCharEntries(bankChars),

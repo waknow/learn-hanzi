@@ -13,8 +13,12 @@ import type { WordBank } from "@/lib/types";
 import { useWeightEngine } from "@/hooks/useWeightEngine";
 import { useSound } from "@/hooks/useSound";
 import { useStats } from "@/hooks/useStats";
+import { debugLog, logError } from "@/lib/debug";
 
 type PageState = "idle" | "loading" | "result";
+
+/** 客户端调试日志（默认静默；NEXT_PUBLIC_DEBUG=1 构建时输出，见 lib/debug.ts） */
+const clientLog = (...args: unknown[]) => debugLog("client", ...args);
 
 /** Suspense 包装器（useSearchParams 需要） */
 export default function SentencePageWrapper() {
@@ -87,11 +91,7 @@ function SentencePage() {
     }
   }, [isComprehensive, bank, bankId, router]);
 
-  // 客户端日志
-  function clientLog(...args: unknown[]) {
-    const time = new Date().toISOString().slice(11, 23);
-    console.log(`[${time}] [client]`, ...args);
-  }
+  // 客户端日志由模块级 clientLog 提供（默认静默，见文件顶部）
 
   // 生成句子
   //
@@ -231,7 +231,7 @@ function SentencePage() {
         clientLog("⏹ 请求已取消（超时或重新生成）");
         return;
       }
-      clientLog(`💥 异常:`, err instanceof Error ? err.message : err);
+      logError("client", "生成异常:", err instanceof Error ? err.message : err);
       play("error");
       setErrorMsg("哎呀，出错了！");
       setState("idle");

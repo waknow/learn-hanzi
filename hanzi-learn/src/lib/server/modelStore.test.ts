@@ -246,4 +246,24 @@ describe("isModelAvailable", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")) as never);
     expect(await isModelAvailable("deepseek-v4-pro")).toBe(true);
   });
+
+  it("已有缓存（即使过期）时立即判定，不等上游刷新", async () => {
+    // 第一次：冷启动，等一次拉取并写入缓存；TTL 设为 0 让缓存立即过期
+    vi.stubEnv("DEEPSEEK_MODEL_CACHE_MS", "0");
+    vi.stubEnv("DEEPSEEK_MODEL_TIMEOUT_MS", "0");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(modelsResponse(["deepseek-v4-pro"])) as never);
+    expect(await isModelAvailable("deepseek-v4-pro")).toBe(true);
+
+    // 第二次：缓存已过期但上游挂起；应立刻用缓存判定（不阻塞）
+    const deferred: { resolve: ((r: Response) => void) | null } = { resolve: null };
+    const hanging = new Promise<Response>((resolve) => {
+      deferred.resolve = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(hanging) as never);
+
+    expect(await isModelAvailable("deepseek-v4-flash")).toBe(false);
+
+    deferred.resolve?.(new Response("{}", { status: 500 }));
+    await Promise.resolve();
+  });
 });

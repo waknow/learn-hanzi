@@ -205,10 +205,28 @@ export function getEffectiveModel(): { model: string; source: ModelSource } {
   return resolveEffectiveModel(selected, process.env.DEEPSEEK_MODEL);
 }
 
-/** 当前选中模型是否被账号支持（网络不可用时不拦截，交由上游判定） */
+/** 读取现有缓存（忽略 TTL）；仅供「不阻塞」的可用性预检使用 */
+export function readCachedModels(): ModelInfo[] | null {
+  return globalCache.__hanziModelCache?.models ?? null;
+}
+
+/**
+ * 当前选中模型是否被账号支持（网络不可用时不拦截，交由上游判定）
+ *
+ * 性能考量：generate 路由每次请求都会调用它。冷启动（进程刚起、从未拉过列表）
+ * 时只能等一次上游；但只要有缓存（哪怕已过期），就用缓存立即判定，并把刷新
+ * 丢到后台——小朋友点「造句子」不该为一次模型列表拉取（最长 8s）买单。
+ */
 export async function isModelAvailable(model: string): Promise<boolean> {
   const apiKey = getApiKey();
   if (!apiKey) return true;
+
+  const cached = readCachedModels();
+  if (cached) {
+    void fetchAvailableModels(apiKey); // 过期则顺带刷新（不 await）
+    return cached.some((m) => m.id === model);
+  }
+
   const entry = await fetchAvailableModels(apiKey);
   if (!entry) return true;
   return entry.models.some((m) => m.id === model);
