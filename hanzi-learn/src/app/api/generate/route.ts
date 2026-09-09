@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { findExtraChars, findUsedChars, hasSensitiveContent } from "@/lib/validator";
+import { checkGeneratedOutput } from "@/lib/generationRules";
 import { readState } from "@/lib/server/stateStore";
 import { getEffectiveModel, isModelAvailable } from "@/lib/server/modelStore";
 import { DEFAULT_MODEL } from "@/lib/modelCatalog";
+import { DEBUG_ENABLED } from "@/lib/debug";
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 // 模型名解析优先级（见 lib/modelCatalog.ts）：
@@ -13,11 +14,7 @@ const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 // 调试开关：DEBUG_PROMPT=1 时打印完整 Prompt（默认关闭，保持生产日志干净）
 const DEBUG_PROMPT = process.env.DEBUG_PROMPT === "1";
 const MAX_RETRIES = 3;
-// 服务端启发式校验（不依赖模型自评——模型自评会“凑分通过”，且低分重试成本高）：
-// - 最少使用字数：单字输出应走“单字直示/兜底”路径，AI 生成必须 ≥2 字
-const MIN_USED_CHARS = 2;
-// - 最大用字数：防止模型堆长句，配合“只输出一个结果”规则
-const MAX_OUTPUT_CHARS = 12;
+// 服务端启发式校验规则（最少字数 / 最大长度 / 越界字 / 敏感词 / 去重）见 lib/generationRules.ts
 
 // DeepSeek 请求超时（毫秒）：上游挂起时中止请求并进入重试，避免无限占用连接。
 // 可用环境变量 DEEPSEEK_TIMEOUT_MS 覆盖（测试用）。
@@ -193,13 +190,17 @@ export async function POST(req: Request) {
     }
     log(`[${requestId}] 使用模型: ${model} (来源: ${modelSource})`);
 
-    // 检查 API Key
-    log(`[${requestId}] API Key 状态:`, {
-      exists: !!apiKey,
-      length: apiKey?.length,
-      preview: apiKey ? apiKey.slice(0, 8) + "..." : "(none)",
-      envKeys: Object.keys(process.env).filter((k) => k.includes("DEEP") || k.includes("API")),
-    });
+    // 检查 API Key（详细环境变量名仅在调试开关打开时打印，避免日志泄露配置）
+    if (DEBUG_ENABLED) {
+      log(`[${requestId}] API Key 状态:`, {
+        exists: !!apiKey,
+        length: apiKey?.length,
+        preview: apiKey ? apiKey.slice(0, 8) + "..." : "(none)",
+        envKeys: Object.keys(process.env).filter((k) => k.includes("DEEP") || k.includes("API")),
+      });
+    } else {
+      log(`[${requestId}] API Key: ${apiKey ? "已配置" : "未配置"}`);
+    }
 
     if (!apiKey || apiKey === "your_deepseek_api_key_here") {
       log(`[${requestId}] ⚠️ 无有效 API Key，直示权重最大单字`);
@@ -306,78 +307,30 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // 检查0：重复输出检测（模型固执重复时直接要求换新）
-        const isDuplicate = attemptedOutputs.some((prev) => prev === text);
+        // 校验链（规则见 lib/generationRules.ts）：
+        // 重复输出 → 敏感词 → 越界字 → 最少字数 → 最大长度 → 最近历史重复
+        // 本轮输出先记入 attemptedOutputs（与旧实现一致：无论后续是否通过都算"试过"）
+        const check = checkGeneratedOutput(text, {
+          allowedSet,
+          allowedChars: sortedCharsStr,
+          recentShown,
+          attemptedOutputs,
+        });
         attemptedOutputs.push(text);
-        if (isDuplicate) {
-          log(`[${requestId}] 检查0 - 重复输出: ❌ 与之前相同`);
+
+        if (!check.ok) {
+          log(`[${requestId}] ${check.detail}`);
           messages.push(
             { role: "assistant", content: text },
-            {
-              role: "user",
-              content: `“${text}”这个内容已经试过了不能通过，请从可用字里换一组完全不同的字，组合成一个新的简单通顺的词或短句。直接输出结果，不要解释、道歉或任何多余文字`,
-            },
+            { role: "user", content: check.feedback },
           );
           continue;
         }
 
-        // 检查1：敏感词
-        const hasSensitive = hasSensitiveContent(text);
-        log(`[${requestId}] 检查1 - 敏感词: ${hasSensitive ? "❌ 命中" : "✅ 通过"}`);
-        if (hasSensitive) {
-          // 回传：告诉模型输出包含敏感内容
-          messages.push(
-            { role: "assistant", content: text },
-            {
-              role: "user",
-              content:
-                "输出中包含不适合儿童的内容，请重新输出一个积极健康的。直接输出结果，不要任何解释",
-            },
-          );
-          continue;
-        }
+        const { text: cleanText, usedChars } = check;
+        log(`[${requestId}] 检查链 ✅ 通过 (用字 ${usedChars.length} 个)`);
 
-        // 剥离评分后缀（避免“自然程度/口语化/完整度”等标签字被误判为越界字）
-        const scoreSuffixMatch = text.match(/【[^】]+】$/);
-        const textBody = scoreSuffixMatch
-          ? text.slice(0, scoreSuffixMatch.index ?? text.length)
-          : text;
-
-        // 检查2：越界字（基于去掉评分后缀的正文）
-        const extraChars = findExtraChars(textBody, allowedSet);
-        log(
-          `[${requestId}] 检查2 - 越界字: ${extraChars.length > 0 ? `❌ 发现 ${extraChars}: ${JSON.stringify(extraChars)}` : "✅ 通过"}`,
-        );
-        if (extraChars.length > 0) {
-          // 回传：列出越界字 + 明确可用字，并要求换新、禁止解释
-          messages.push(
-            { role: "assistant", content: text },
-            {
-              role: "user",
-              content: `“${extraChars.join("")}”这些字不在可用字里，绝对不允许使用。可用字只有：${sortedCharsStr}。请从这些字里重新选一组完全不同的字，组合成一个简单通顺的词或短句。直接输出结果，不要解释、道歉或任何多余文字`,
-            },
-          );
-          continue;
-        }
-
-        // 检查3：最少使用字数量（基于正文）
-        const usedChars = findUsedChars(textBody, allowedSet);
-        log(
-          `[${requestId}] 检查3 - 最少字数: ${usedChars.length < MIN_USED_CHARS ? `❌ 只用 ${usedChars.length} 个字` : `✅ 通过 (${usedChars.length}个)`}`,
-        );
-        if (usedChars.length < MIN_USED_CHARS) {
-          // 回传：至少用 MIN_USED_CHARS 个字，并换新
-          messages.push(
-            { role: "assistant", content: text },
-            {
-              role: "user",
-              content: `至少使用 ${MIN_USED_CHARS} 个可用字，请换一组字重新输出。直接输出结果，不要任何解释`,
-            },
-          );
-          continue;
-        }
-
-        // 命中字权重日志
+        // 命中字权重日志（调试用）
         try {
           if (themeWeights) {
             const weightArr = JSON.parse(themeWeights) as { char: string; weight: number }[];
@@ -391,35 +344,6 @@ export async function POST(req: Request) {
           }
         } catch {
           /* weights parse error, skip */
-        }
-
-        // 检查4：最大长度（服务端启发式，防止模型堆长句）
-        if (usedChars.length > MAX_OUTPUT_CHARS) {
-          log(
-            `[${requestId}] 检查4 - 最大长度: ❌ 用字 ${usedChars.length} 个 > ${MAX_OUTPUT_CHARS} 个`,
-          );
-          messages.push(
-            { role: "assistant", content: text },
-            {
-              role: "user",
-              content: `“${textBody}”太长了，请缩短到 ${MAX_OUTPUT_CHARS} 个字以内，输出一个简短通顺的词或短句。直接输出结果，不要任何解释`,
-            },
-          );
-          continue;
-        }
-
-        // 检查5：与最近生成历史重复（硬拦截，模型无视软约束时兜底）
-        const cleanText = textBody.trim();
-        if (recentShown.includes(cleanText)) {
-          log(`[${requestId}] 检查5 - 与最近历史重复: ❌ "${cleanText}"`);
-          messages.push(
-            { role: "assistant", content: text },
-            {
-              role: "user",
-              content: `“${cleanText}”这个句子最近已经生成过了，请换一个完全不同的词或短句。直接输出结果，不要任何解释`,
-            },
-          );
-          continue;
         }
 
         recordShown(bankId, cleanText);
