@@ -78,6 +78,26 @@ describe("syncOnce", () => {
     expect(loadConfig().password).toBe("9999");
   });
 
+  it("拉取覆盖本地时抑制回写（不把刚拉下的数据再推回服务端）", async () => {
+    const serverState = {
+      weightData: { level1: { round: 1, chars: [] } },
+      stats: { totalCalls: 1, todayCalls: 1, todayDate: "2026-08-01", weeklyCalls: 1 },
+      config: { password: "9999", enabledBanks: [], customBanks: [] },
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(serverState), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock as never);
+
+    await syncOnce();
+    // 越过 500ms 防抖窗口：若未抑制，这里会多出一次 PUT /api/state
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0][1] as RequestInit | undefined)?.method).toBeUndefined();
+  });
+
   it("网络失败时静默，保持本地缓存", async () => {
     const local = { level1: { round: 1, chars: [] } };
     localStorage.setItem(KEYS.WEIGHT_DATA, JSON.stringify(local));

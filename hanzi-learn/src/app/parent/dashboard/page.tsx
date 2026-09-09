@@ -34,8 +34,11 @@ export default function DashboardPage() {
 
   if (!stats) return null;
 
-  // 本周句子
+  // 最近句子（sentenceHistory 只保留最近 200 条，所以这里是"最近"而非"全部"）
   const recentSentences = stats.sentenceHistory.slice(0, 10);
+
+  // 已学汉字数（charUsage 不截断，长期使用也不会像 sentenceHistory 那样饱和在 200）
+  const learnedCharCount = Object.keys(stats.charUsage).length;
 
   // 本周学习天数（本地日期，避免 UTC 偏移跨天错位）
   const today = localDateString();
@@ -78,12 +81,7 @@ export default function DashboardPage() {
           color="candy-orange"
         />
         <StatCard label="本周" value={`${weeklySum}`} emoji="📈" color="candy-green" />
-        <StatCard
-          label="累计句子"
-          value={`${stats.sentenceHistory.length}`}
-          emoji="💬"
-          color="candy-teal"
-        />
+        <StatCard label="已学汉字" value={`${learnedCharCount}`} emoji="🔤" color="candy-teal" />
       </div>
 
       {/* 学习日历 */}

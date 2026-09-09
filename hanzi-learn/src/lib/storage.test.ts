@@ -13,6 +13,7 @@ import {
   loadConfig,
   saveConfig,
   flushServerSync,
+  withSuppressedServerSync,
 } from "./storage";
 import type { WeightData, StudyStats, ParentConfig } from "./types";
 
@@ -108,5 +109,74 @@ describe("flushServerSync 防抖推送", () => {
       charUsage: {},
     } as StudyStats);
     expect(() => flushServerSync()).not.toThrow();
+  });
+});
+
+describe("withSuppressedServerSync 抑制回写", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    // 排空上一组用例可能遗留的模块级待同步块
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    flushServerSync();
+    vi.restoreAllMocks();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("抑制期间保存：本地写入成功但不推送服务端", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    const data: WeightData = { level1: { round: 2, chars: [] } };
+    withSuppressedServerSync(() => saveWeightData(data));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(loadWeightData()).toEqual(data);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("抑制结束后恢复正常推送", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    withSuppressedServerSync(() => saveWeightData({ level1: { round: 1, chars: [] } }));
+    saveStats({
+      totalCalls: 1,
+      todayCalls: 1,
+      todayDate: "",
+      weeklyCalls: 1,
+      history: {},
+      sentenceHistory: [],
+      charUsage: {},
+    } as StudyStats);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String((spy.mock.calls[0] as [string, RequestInit])[1].body))).toHaveProperty(
+      "stats",
+    );
+  });
+
+  it("回调抛异常也恢复推送（finally 保证）", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    expect(() =>
+      withSuppressedServerSync(() => {
+        throw new Error("boom");
+      }),
+    ).toThrow("boom");
+
+    saveConfig({ password: "1234", enabledBanks: [], customBanks: [] });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });

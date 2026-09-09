@@ -46,9 +46,30 @@ type SyncBlock = "weightData" | "stats" | "config";
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingBlocks = new Set<SyncBlock>();
 
+/** 同步抑制计数（>0 时所有 save* 都不再调度推送） */
+let suppressSyncDepth = 0;
+
+/**
+ * 在回调期间抑制服务端推送。
+ *
+ * 用途：启动同步把服务端数据写回 localStorage 时（见 stateSync.ts），
+ * 若不加抑制会立刻把刚拉下来的同一份数据再 PUT 回服务端——一次无意义的
+ * 往返 + 服务端整文件重写，还会把 updatedAt 刷成"刚改过"。
+ * 嵌套调用安全（计数式）。
+ */
+export function withSuppressedServerSync<T>(fn: () => T): T {
+  suppressSyncDepth += 1;
+  try {
+    return fn();
+  } finally {
+    suppressSyncDepth -= 1;
+  }
+}
+
 /** 保存后调度一次防抖推送（500ms 合并多次写入） */
 function scheduleServerSync(kind: SyncBlock) {
   if (typeof window === "undefined") return;
+  if (suppressSyncDepth > 0) return;
   pendingBlocks.add(kind);
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {

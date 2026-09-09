@@ -10,7 +10,7 @@ import {
 } from "@/hooks/usePrintConfig";
 import { getPinyin } from "@/lib/pinyin";
 import { expandWithFrequency } from "@/lib/frequency";
-import { getCharColor } from "@/lib/colors";
+import { getCharColor, type ColorPair } from "@/lib/colors";
 
 interface PrintCardsProps {
   chars: string[];
@@ -64,6 +64,9 @@ const CUT_OPTIONS = [
   { value: "隐藏" as CutLine, label: "隐藏" },
 ];
 
+/** 不染色时的默认配色 */
+const NO_COLOR: ColorPair = { bg: "#ffffff", fg: "#000000" };
+
 export default function PrintCards({ chars }: PrintCardsProps) {
   const { config, setConfig, loaded } = usePrintConfig();
   const layout = LAYOUT_MAP[config.size];
@@ -81,12 +84,22 @@ export default function PrintCards({ chars }: PrintCardsProps) {
   /** 所有不重复的字符（用于染色索引） */
   const uniqueChars = useMemo(() => [...new Set(expandedChars.filter(Boolean))], [expandedChars]);
 
-  const pages: string[][] = [];
-  for (let i = 0; i < expandedChars.length; i += cardsPerPage) {
-    pages.push(expandedChars.slice(i, i + cardsPerPage));
-    const last = pages[pages.length - 1];
-    while (last.length < cardsPerPage) last.push("");
-  }
+  /** 染色查表：一次性建表，避免每张卡都做一次 indexOf（O(n²) → O(n)） */
+  const colorMap = useMemo(
+    () => new Map(uniqueChars.map((char) => [char, getCharColor(char, uniqueChars)])),
+    [uniqueChars],
+  );
+
+  /** 分页（每页 cardsPerPage 张，末页用空串补齐） */
+  const pages = useMemo(() => {
+    const result: string[][] = [];
+    for (let i = 0; i < expandedChars.length; i += cardsPerPage) {
+      const page = expandedChars.slice(i, i + cardsPerPage);
+      while (page.length < cardsPerPage) page.push("");
+      result.push(page);
+    }
+    return result;
+  }, [expandedChars, cardsPerPage]);
 
   if (!loaded) return null;
 
@@ -213,9 +226,8 @@ export default function PrintCards({ chars }: PrintCardsProps) {
             >
               {pageChars.map((char, idx) => {
                 const color =
-                  config.showColor && char
-                    ? getCharColor(char, uniqueChars)
-                    : { bg: "#ffffff", fg: "#000000" };
+                  config.showColor && char ? (colorMap.get(char) ?? NO_COLOR) : NO_COLOR;
+                const pinyin = config.showPinyin && char ? getPinyin(char) : undefined;
 
                 return (
                   <div
@@ -238,7 +250,7 @@ export default function PrintCards({ chars }: PrintCardsProps) {
                         >
                           {char}
                         </span>
-                        {config.showPinyin && getPinyin(char) && (
+                        {pinyin && (
                           <span
                             style={{
                               fontSize: `calc(${layout.charSize} / 3.5)`,
@@ -248,7 +260,7 @@ export default function PrintCards({ chars }: PrintCardsProps) {
                               opacity: 0.6,
                             }}
                           >
-                            {getPinyin(char)}
+                            {pinyin}
                           </span>
                         )}
                       </>

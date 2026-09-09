@@ -16,6 +16,7 @@ import {
   saveStats,
   loadConfig,
   saveConfig,
+  withSuppressedServerSync,
 } from "./storage";
 import type { WeightData, StudyStats, ParentConfig } from "./types";
 
@@ -81,9 +82,12 @@ export async function syncOnce(): Promise<void> {
     }
 
     // 服务端为准：拉取覆盖本地
-    if (isNonEmpty(state.weightData)) saveWeightData(state.weightData as WeightData);
-    if (state.stats) saveStats(state.stats as StudyStats);
-    if (state.config) saveConfig(state.config as ParentConfig);
+    // 抑制回写：这批写入来自服务端，不需要再推回去（避免无意义 PUT + 服务端重写）
+    withSuppressedServerSync(() => {
+      if (isNonEmpty(state.weightData)) saveWeightData(state.weightData as WeightData);
+      if (state.stats) saveStats(state.stats as StudyStats);
+      if (state.config) saveConfig(state.config as ParentConfig);
+    });
     localStorage.setItem(SYNCED_FLAG, "1");
   } catch {
     // 网络失败：保持本地缓存，静默，下次挂载重试
