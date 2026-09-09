@@ -79,9 +79,13 @@ npm run docker:build # Docker 构建（含代理 + tar 导出）
 ### AI 句子生成流水线
 
 1. 前端 `useWeightEngine` 加权排序 → 2. `POST /api/generate` →
-3. DeepSeek 生成 → 4. 服务端校验链（敏感词、越界字、最少字数 2 字、
-   最大长度 12 字、历史去重；不依赖模型自评）→ 5. 通过即返回，失败最多重试 3 次
-   （超时 12s + 指数退避）→ 6. 全部失败时挑选权重最大的字直接显示单字
+3. DeepSeek 生成 → 4. 服务端校验链（`lib/generationRules.ts`：重复输出、敏感词、
+   越界字、最少字数 2 字、最大长度 12 字、历史去重；不依赖模型自评）→
+5. 通过即返回，失败最多重试 3 次（超时 12s + 指数退避，纠错提示回传给模型）→
+6. 全部失败时挑选权重最大的字直接显示单字
+
+> 校验规则集中在纯函数 `checkGeneratedOutput()`，路由只负责调用与回传纠错提示；
+> 改规则请同步 `generationRules.test.ts`。
 
 ### AI 模型选择（`lib/modelCatalog.ts` + `lib/server/modelStore.ts`）
 
@@ -138,6 +142,9 @@ npm run docker:build # Docker 构建（含代理 + tar 导出）
    不写在 `.env` 或代码中。Docker 通过 `-v` 挂载。
 8. **API 路由**：保持精简，当前为 `api/generate`（句子生成）、`api/model`（模型列表与切换）、
    `api/state`（服务端状态同步）；新增路由前先考虑能否并入既有端点。
+9. **日志**：详细日志走 `lib/debug.ts` 的 `debugLog()`（默认静默，构建时 `NEXT_PUBLIC_DEBUG=1`
+   开启）；异常走 `logError()`（始终输出）。业务代码不直接 `console.log`——
+   加权洗牌等高频路径在生产环境会刷屏。
 
 ## 测试与质量
 
