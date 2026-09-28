@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useBanks } from "@/hooks/useBanks";
+import { getActiveChars } from "@/lib/banks";
 import { useSound } from "@/hooks/useSound";
 
 const CARD_COLORS = [
@@ -107,7 +108,7 @@ export default function WordBankPicker() {
               <span className="text-lg font-cartoon text-gray-700">{bank.name}</span>
             </motion.button>
 
-            {bank.chars.length > 0 && (
+            {getActiveChars(bank).length > 0 && (
               <button
                 onClick={() => router.push(`/print?bank=${bank.id}`)}
                 className="absolute bottom-2 right-2 z-10 w-7 h-7 rounded-full bg-white/70

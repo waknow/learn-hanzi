@@ -128,7 +128,7 @@ npm run tag          # 版本打 tag（scripts/tag.sh）
 
 ### 打印字卡（`/print` 路由）
 
-- 独立页面，通过 URL query `?bank=xxx` 切换字库（数据来自 `data/banks.json`；`comprehensive` 综合为虚拟字库，由已启用字库求并集）
+- 独立页面，通过 URL query `?bank=xxx` 切换字库（数据来自 `data/banks.json`；`comprehensive` 综合为虚拟字库，由已启用字库求并集；均只取 `getActiveChars()` 生效字）
 - 支持：字体/字号/裁切线/拼音显示/染色/份数系数 等配置（`hooks/usePrintConfig.ts`）
 - 按字频分为 3 级（Tier 1~3），高频字印更多份；未登记字按 Tier 3
 - 打印配置保存在浏览器 localStorage，不参与服务端同步
@@ -170,6 +170,19 @@ npm run tag          # 版本打 tag（scripts/tag.sh）
 
 ⚠️ `banks.json` 里的内置条目不可删除，只能 `enabled: false` 停用；停用的字库不会出现在"综合"里。
 删除自定义字库时需联动清理 `stats.progress[bankId]`（设置页已处理）。
+
+### 字库内容维护（`lib/banks.ts` 纯函数 + `app/parent/banks` 页面）
+
+- **入口**：设置页每张字库卡片 →「📝 内容」→ `/parent/banks?bank=<id>`
+  （`app/parent/settings/page.tsx` 只负责入口跳转，维护逻辑都在维护页 + 纯函数里）
+- **生效字**：`chars` 保存字库完整定义，`disabledChars` 记录被家长单独禁用的字；
+  **一切"用字"的地方都必须走 `getActiveChars()`**（生成 / 打印 / 综合合并 / 卡片字数），不得直接用 `bank.chars`
+- **内置字**：`origin === "builtin"` 且出现在 `lib/seed/builtinBanks.ts` 默认值里的字（`isBuiltinChar()`）
+  只能禁用、不能删除；家长新增到内置字库的字属于自定义内容，可以删除
+- **升级补种免疫**：给内置字库补充新字会置 `customized: true`（否则 E3 会把新增内容冲掉）；
+  仅禁用汉字（`disabledChars`）不改内容，因此不置 `customized`，仍可接收升级
+- **下限**：每个字库至少保留 `MIN_ACTIVE_CHARS`（1）个生效字，禁用/删除到 0 个会被纯函数拒绝
+- 新增/修改此规则时同步 `lib/banks.test.ts` 与 `app/parent/banks/page.test.tsx`
 
 ### 密码保护
 

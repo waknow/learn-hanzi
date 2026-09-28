@@ -9,8 +9,10 @@ import userEvent from "@testing-library/user-event";
 import SettingsPage from "./page";
 import { loadBanks, loadConfig, loadWeightData, saveBanks, saveWeightData } from "@/lib/storage";
 
+const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: routerMock.push, replace: vi.fn() }),
 }));
 
 const MODEL_BODY = {
@@ -42,6 +44,7 @@ const MODEL_BODY = {
 
 beforeEach(() => {
   localStorage.clear();
+  routerMock.push.mockClear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_url: string, init?: RequestInit) => {
@@ -114,6 +117,32 @@ describe("家长设置页 — 字库启用/禁用", () => {
     await userEvent.click(screen.getByText("一级"));
 
     expect(loadBanks().items.find((b) => b.id === "level1")?.enabled).toBe(true);
+  });
+
+  it("每张字库卡片都有「内容维护」入口，点击进入对应字库", async () => {
+    render(<SettingsPage />);
+    await screen.findByText("🤖 AI 模型");
+
+    // 一级（内置）与二级各有一个内容入口
+    const contentButtons = screen.getAllByText("📝 内容");
+    expect(contentButtons.length).toBeGreaterThan(0);
+
+    await userEvent.click(contentButtons[0]);
+    expect(routerMock.push).toHaveBeenCalledWith("/parent/banks?bank=level1");
+  });
+
+  it("卡片展示生效字数与禁用字数", async () => {
+    const banks = loadBanks();
+    saveBanks({
+      items: banks.items.map((b) => (b.id === "level1" ? { ...b, disabledChars: ["小"] } : b)),
+    });
+
+    render(<SettingsPage />);
+    await screen.findByText("🤖 AI 模型");
+
+    const level1 = loadBanks().items.find((b) => b.id === "level1")!;
+    expect(screen.getByText(`${level1.chars.length - 1}字`)).toBeInTheDocument();
+    expect(screen.getByText(/禁用1/)).toBeInTheDocument();
   });
 
   it("删除自定义字库时同时清理字库条目与权重进度", async () => {

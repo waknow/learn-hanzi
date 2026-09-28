@@ -12,6 +12,7 @@ import {
   saveStats,
 } from "@/lib/storage";
 import { useBanks } from "@/hooks/useBanks";
+import { getActiveChars, getDisabledChars } from "@/lib/banks";
 import ModelSelector from "@/components/parent/ModelSelector";
 import type { BankRecord, ConfigSection, WordBank } from "@/lib/types";
 
@@ -205,6 +206,7 @@ export default function SettingsPage() {
               bank={bank}
               enabled={true}
               onToggle={() => toggleBank(bank.id)}
+              onContent={() => router.push(`/parent/banks?bank=${bank.id}`)}
               onEdit={bank.origin === "custom" ? () => openEditor(bank) : undefined}
               onDelete={bank.origin === "custom" ? () => deleteCustom(bank.id) : undefined}
             />
@@ -228,6 +230,7 @@ export default function SettingsPage() {
                 bank={bank}
                 enabled={false}
                 onToggle={() => toggleBank(bank.id)}
+                onContent={() => router.push(`/parent/banks?bank=${bank.id}`)}
                 onEdit={bank.origin === "custom" ? () => openEditor(bank) : undefined}
                 onDelete={bank.origin === "custom" ? () => deleteCustom(bank.id) : undefined}
               />
@@ -264,6 +267,7 @@ export default function SettingsPage() {
                 bank={bank}
                 enabled={bank.enabled}
                 onToggle={() => toggleBank(bank.id)}
+                onContent={() => router.push(`/parent/banks?bank=${bank.id}`)}
                 onEdit={() => openEditor(bank)}
                 onDelete={() => deleteCustom(bank.id)}
               />
@@ -429,15 +433,21 @@ function BankToggleCard({
   bank,
   enabled,
   onToggle,
+  onContent,
   onEdit,
   onDelete,
 }: {
   bank: BankRecord;
   enabled: boolean;
   onToggle: () => void;
+  /** 进入字库内容维护页（添加 / 删除 / 禁用汉字） */
+  onContent: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
+  const activeCount = getActiveChars(bank).length;
+  const disabledCount = getDisabledChars(bank).length;
+
   return (
     <motion.div
       layout
@@ -450,23 +460,31 @@ function BankToggleCard({
       <button onClick={onToggle} className="w-full">
         <div className="text-2xl mb-1">{bank.emoji}</div>
         <div className="text-sm font-cartoon text-gray-600">{bank.name}</div>
-        <div className="text-xs text-gray-300 mt-1">{bank.chars.length}字</div>
+        <div className="text-xs text-gray-300 mt-1">
+          {activeCount}字
+          {disabledCount > 0 && <span className="text-gray-400"> · 禁用{disabledCount}</span>}
+        </div>
         <div className={`mt-2 text-xs ${enabled ? "text-candy-green" : "text-gray-300"}`}>
           {enabled ? "✅ 已启用" : "❌ 已禁用"}
         </div>
       </button>
 
-      {/* 编辑/删除按钮（仅自定义字库） */}
-      {onEdit && onDelete && (
-        <div className="flex justify-center gap-3 mt-2">
+      {/* 内容维护（所有字库都可进：内置字库只能禁用/添加，自定义字库还能删除） */}
+      <div className="flex justify-center gap-3 mt-2">
+        <button onClick={onContent} className="text-xs text-candy-purple">
+          📝 内容
+        </button>
+        {onEdit && (
           <button onClick={onEdit} className="text-xs text-candy-teal">
             ✏️ 编辑
           </button>
+        )}
+        {onDelete && (
           <button onClick={onDelete} className="text-xs text-red-400">
             🗑️ 删除
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </motion.div>
   );
 }

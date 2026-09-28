@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useBanks } from "@/hooks/useBanks";
+import { getActiveChars } from "@/lib/banks";
 import PrintCards from "@/components/child/PrintCards";
 
 function PrintPageInner() {
@@ -31,7 +32,8 @@ function PrintPageInner() {
       router.push("/child");
       return;
     }
-    setChars([...bank.chars]);
+    // 只打印生效字（被家长在内容维护页禁用过的字不打印）
+    setChars(getActiveChars(bank));
   }, [ready, bank, router]);
 
   if (!ready) {

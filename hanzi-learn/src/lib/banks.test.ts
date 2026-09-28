@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addBankChars,
   applyEnabledBanks,
   createBanksSection,
   createMigratedBankRecords,
   createSeedRecords,
+  extractHanziChars,
   findBank,
+  getActiveChars,
+  getBuiltinCharSet,
+  getDisabledChars,
   getEnabledBanks,
+  isBuiltinChar,
+  isHanziChar,
   mergeBankChars,
   reconcileBanks,
+  removeBankChars,
   seedFingerprint,
+  setBankCharsEnabled,
 } from "./banks";
 import { BUILTIN_BANK_SEED, BUILTIN_SEED_REVISION } from "./seed/builtinBanks";
 import { SCHEMA_VERSION } from "./schema";
@@ -311,5 +320,207 @@ describe("findBank / getEnabledBanks / mergeBankChars", () => {
   it("空列表返回空数组", () => {
     expect(mergeBankChars([])).toEqual([]);
     expect(getEnabledBanks([])).toEqual([]);
+  });
+
+  it("mergeBankChars 不合并被家长禁用的字", () => {
+    const withDisabled: BankRecord[] = [
+      {
+        id: "a",
+        name: "甲",
+        emoji: "1",
+        chars: ["小", "大"],
+        origin: "builtin",
+        enabled: true,
+        disabledChars: ["大"],
+      },
+      { id: "b", name: "乙", emoji: "2", chars: ["大", "了"], origin: "custom", enabled: true },
+    ];
+    expect(mergeBankChars(withDisabled)).toEqual(["小", "大", "了"]);
+    expect(mergeBankChars(withDisabled, { enabledOnly: false })).toEqual(["小", "大", "了"]);
+  });
+});
+
+/* ========== 字库内容维护（添加 / 删除 / 禁用汉字） ========== */
+
+/** 构造一个内容维护用的条目（默认是内置 level1：小 大 了） */
+function contentBank(over: Partial<BankRecord> = {}): BankRecord {
+  return {
+    id: "level1",
+    name: "一级",
+    emoji: "🏠",
+    chars: ["小", "大", "了"],
+    origin: "builtin",
+    enabled: true,
+    ...over,
+  };
+}
+
+describe("汉字识别与抽取", () => {
+  it("isHanziChar 只认 CJK 基本区汉字", () => {
+    expect(isHanziChar("小")).toBe(true);
+    expect(isHanziChar("a")).toBe(false);
+    expect(isHanziChar("🐼")).toBe(false);
+    expect(isHanziChar("")).toBe(false);
+  });
+
+  it("extractHanziChars 去重保序并丢弃非汉字", () => {
+    expect(extractHanziChars("熊猫panda🐼 熊")).toEqual(["熊", "猫"]);
+    expect(extractHanziChars("")).toEqual([]);
+  });
+});
+
+describe("生效字 / 禁用字", () => {
+  it("getActiveChars 排除禁用字并保持原顺序", () => {
+    expect(getActiveChars(contentBank({ disabledChars: ["大"] }))).toEqual(["小", "了"]);
+    expect(getActiveChars(contentBank())).toEqual(["小", "大", "了"]);
+  });
+
+  it("getDisabledChars 归一化：去重、按 chars 顺序、丢弃已不存在的残留", () => {
+    expect(getDisabledChars(contentBank({ disabledChars: ["大", "大", "坏"] }))).toEqual(["大"]);
+    expect(
+      getDisabledChars(contentBank({ chars: ["小", "大", "了"], disabledChars: ["了", "小"] })),
+    ).toEqual(["小", "了"]);
+    expect(getDisabledChars(contentBank())).toEqual([]);
+  });
+});
+
+describe("内置字判定（不可删除）", () => {
+  it("内置字库里来自默认值的字 = 内置字；家长新增的字不是", () => {
+    const record = { ...contentBank(), chars: ["小", "熊"] };
+    expect(isBuiltinChar(record, "小", SEED_V1)).toBe(true);
+    expect(isBuiltinChar(record, "熊", SEED_V1)).toBe(false);
+  });
+
+  it("自定义字库里的字一律不是内置字（即便 id 与内置相同）", () => {
+    const custom = contentBank({ origin: "custom", chars: ["小"] });
+    expect(isBuiltinChar(custom, "小", SEED_V1)).toBe(false);
+  });
+
+  it("getBuiltinCharSet 未知 id 返回空集合", () => {
+    expect(getBuiltinCharSet("nope", SEED_V1).size).toBe(0);
+    expect([...getBuiltinCharSet("level1", SEED_V1)]).toEqual(["小", "大"]);
+  });
+});
+
+describe("addBankChars", () => {
+  it("追加新字：去重、按输入顺序、未变化时返回原条目", () => {
+    const source = contentBank();
+    const result = addBankChars(source, "熊猫", NOW);
+    expect(result.added).toEqual(["熊", "猫"]);
+    expect(result.bank.chars).toEqual(["小", "大", "了", "熊", "猫"]);
+    expect(result.bank.updatedAt).toBe(NOW);
+
+    const noop = addBankChars(source, "小", NOW);
+    expect(noop.changed).toBe(false);
+    expect(noop.bank).toBe(source);
+  });
+
+  it("往内置字库加字 → 置 customized（否则升级补种会冲掉新增内容）", () => {
+    expect(addBankChars(contentBank(), "熊", NOW).bank.customized).toBe(true);
+    expect(addBankChars(contentBank({ origin: "custom" }), "熊", NOW).bank.customized).toBe(
+      undefined,
+    );
+  });
+
+  it("已在字库但被禁用的字 → 重新启用，不再重复追加", () => {
+    const result = addBankChars(contentBank({ disabledChars: ["大"] }), "大", NOW);
+    expect(result.added).toEqual([]);
+    expect(result.restored).toEqual(["大"]);
+    expect(result.changed).toBe(true);
+    expect(result.bank.chars).toEqual(["小", "大", "了"]);
+    expect(result.bank.disabledChars).toBeUndefined();
+  });
+
+  it("纯函数：不改入参", () => {
+    const source = contentBank();
+    addBankChars(source, "熊", NOW);
+    expect(source.chars).toEqual(["小", "大", "了"]);
+  });
+});
+
+describe("removeBankChars", () => {
+  it("内置字不可删除：拒绝且不改变条目", () => {
+    const source = contentBank();
+    const result = removeBankChars(source, ["小"], NOW);
+    expect(result.changed).toBe(false);
+    expect(result.rejected).toEqual(["小"]);
+    expect(result.bank.chars).toEqual(["小", "大", "了"]);
+  });
+
+  it("家长新增到内置字库的字可以删除", () => {
+    const source = contentBank({ chars: ["小", "大", "了", "熊", "猫"], customized: true });
+    const result = removeBankChars(source, ["熊"], NOW);
+    expect(result.removed).toEqual(["熊"]);
+    expect(result.bank.chars).toEqual(["小", "大", "了", "猫"]);
+    expect(result.bank.updatedAt).toBe(NOW);
+  });
+
+  it("自定义字库的字可以删除，并同步清理 disabledChars 残留", () => {
+    const source = contentBank({
+      origin: "custom",
+      chars: ["猫", "狗", "鸟"],
+      disabledChars: ["狗"],
+    });
+    const result = removeBankChars(source, ["狗", "不存在"], NOW);
+    expect(result.removed).toEqual(["狗"]);
+    expect(result.bank.chars).toEqual(["猫", "鸟"]);
+    expect(result.bank.disabledChars).toBeUndefined();
+  });
+
+  it("删到零个生效字 → 整批拒绝（应改用删除整个字库）", () => {
+    const source = contentBank({ origin: "custom", chars: ["猫"] });
+    const result = removeBankChars(source, ["猫"], NOW);
+    expect(result.changed).toBe(false);
+    expect(result.bank.chars).toEqual(["猫"]);
+  });
+});
+
+describe("setBankCharsEnabled", () => {
+  it("禁用 → 写入 disabledChars；启用 → 移除", () => {
+    const off = setBankCharsEnabled(contentBank(), ["大"], false, NOW);
+    expect(off.toggled).toEqual(["大"]);
+    expect(off.bank.disabledChars).toEqual(["大"]);
+    expect(off.bank.updatedAt).toBe(NOW);
+
+    const on = setBankCharsEnabled(off.bank, ["大"], true, LATER);
+    expect(on.toggled).toEqual(["大"]);
+    expect(on.bank.disabledChars).toBeUndefined();
+  });
+
+  it("不能禁用最后一个生效字", () => {
+    const source = contentBank({ chars: ["小"] });
+    const result = setBankCharsEnabled(source, ["小"], false, NOW);
+    expect(result.changed).toBe(false);
+    expect(result.bank.disabledChars).toBeUndefined();
+  });
+
+  it("对不存在或状态已一致的字是无操作", () => {
+    expect(setBankCharsEnabled(contentBank(), ["不存在"], false, NOW).changed).toBe(false);
+    const alreadyOff = contentBank({ disabledChars: ["大"] });
+    expect(setBankCharsEnabled(alreadyOff, ["大"], false, NOW).changed).toBe(false);
+  });
+
+  it("纯函数：不改入参", () => {
+    const source = contentBank();
+    setBankCharsEnabled(source, ["大"], false, NOW);
+    expect(source.disabledChars).toBeUndefined();
+  });
+});
+
+describe("reconcileBanks 与内容维护共存", () => {
+  it("升级补种保留家长禁用的字（disabledChars 不丢）", () => {
+    const first = seeded();
+    first.items[0].disabledChars = ["大"];
+    const { section } = reconcileBanks(first, { seed: SEED_V2, revision: 2, now: LATER });
+    expect(section.items[0].chars).toEqual(["小", "大", "了"]);
+    expect(section.items[0].disabledChars).toEqual(["大"]);
+  });
+
+  it("幂等读取时 disabledChars 是深拷贝，改结果不污染入参", () => {
+    const first = seeded();
+    first.items[0].disabledChars = ["大"];
+    const { section } = reconcileBanks(first, { seed: SEED_V1, revision: 1, now: LATER });
+    section.items[0].disabledChars?.push("小");
+    expect(first.items[0].disabledChars).toEqual(["大"]);
   });
 });

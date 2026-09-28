@@ -8,6 +8,7 @@ import LoadingState from "@/components/child/LoadingState";
 import ResultState from "@/components/child/ResultState";
 import BackButton from "@/components/child/BackButton";
 import { useBanks } from "@/hooks/useBanks";
+import { getActiveChars } from "@/lib/banks";
 import type { WordBank } from "@/lib/types";
 import { useWeightEngine } from "@/hooks/useWeightEngine";
 import { useSound } from "@/hooks/useSound";
@@ -80,7 +81,8 @@ function SentencePage() {
 
   // 权重引擎
   // useMemo：bank 为空时 `|| []` 会每次渲染新建数组，导致依赖它的 useCallback 每次重建
-  const chars = useMemo(() => bank?.chars || [], [bank]);
+  // ⚠️ 用 getActiveChars：内容维护页禁用过的汉字不参与生成
+  const chars = useMemo(() => (bank ? getActiveChars(bank) : []), [bank]);
   const weightEngine = useWeightEngine(bankId, chars);
 
   // 就绪后仍找不到字库 → 跳回选择页。

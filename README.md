@@ -77,6 +77,7 @@ API 路由等 Node 场景用例通过 `@vitest-environment node` 覆盖。
 | 密码验证 `/parent`           | 4 位数字键盘，首次使用引导设置                                                              |
 | 统计看板 `/parent/dashboard` | 总使用 / 今日 / 本周（近 7 天）/ 已学汉字、各字使用频率柱状图、本周打卡日历、最近 10 条句子 |
 | 字库管理 `/parent/settings`  | AI 模型切换、启用/禁用字库、自定义字库增删改、权重重置、修改家长密码、清除学习记录          |
+| 字库内容 `/parent/banks?bank=xxx` | 逐个维护字库里的汉字：添加 / 删除 / 禁用；内置字只能禁用不能删除                     |
 
 ### 🖨️ 字卡打印
 
@@ -98,6 +99,11 @@ API 路由等 Node 场景用例通过 `@vitest-environment node` 覆盖。
 **两级内置字库 + 自定义**：内置「一级」（60 个基础字）与「二级」（当前启用 10 个字：
 雨伞闪电干根土皮枝森，其余 80 字以注释预留）字库，可合并为「综合」模式；
 家长可在设置页新增自定义字库（2~15 个汉字），自定义字库同样支持生成与打印。
+
+**字库内容维护**：设置页每张字库卡片都有「📝 内容」入口，进入 `/parent/banks?bank=xxx` 可逐个维护
+字库里的汉字——添加、删除、禁用/启用。给整个字库启停之外，被禁用的单个汉字同样不参与生成、打印与
+「综合」合并；内置于应用的内置字（🔒）只能禁用、不能删除，家长自己添加的字可以删除；每个字库至少
+保留 1 个生效汉字。
 
 **加权随机排序**：每个汉字初始权重为 1。被 AI 使用后权重重置为 0，未被使用的每次 +1（无上限）。
 权重越高，下次被排到前面的概率越大；权重 > 20 且距上次直示 ≥ 3 轮时，跳过 API 直接显示权重最大的单字，
@@ -149,7 +155,8 @@ learn-hanzi/                          # Git 仓库根
     │   │   ├── parent/
     │   │   │   ├── page.tsx          # 密码验证
     │   │   │   ├── dashboard/page.tsx# 统计看板
-    │   │   │   └── settings/page.tsx # 字库管理与 AI 模型
+    │   │   │   ├── settings/page.tsx # 字库管理与 AI 模型
+    │   │   │   └── banks/page.tsx    # 字库内容维护（添加/删除/禁用汉字）
     │   │   ├── print/page.tsx        # 🖨️ 字卡打印页
     │   │   └── api/
     │   │       ├── generate/route.ts # DeepSeek 代理 + 校验链 + 重试
@@ -180,7 +187,7 @@ learn-hanzi/                          # Git 仓库根
     │   ├── lib/
     │   │   ├── types.ts              # 核心类型定义
     │   │   ├── schema.ts             # 持久化结构版本与分区文件名
-    │   │   ├── banks.ts              # 词库分区纯函数（初始化/迁移/升级补种/合并，双端共用）
+    │   │   ├── banks.ts              # 词库分区纯函数（初始化/迁移/升级补种/内容维护/合并，双端共用）
     │   │   ├── stateShape.ts         # 跨分区共享判定（默认值 / 用户数据 / 时间戳）
     │   │   ├── seed/builtinBanks.ts  # 内置字库「初始化默认值」（仅初始化模块可引用）
     │   │   ├── weightEngine.ts       # 加权不放回抽样算法
@@ -279,7 +286,7 @@ learn-hanzi/                          # Git 仓库根
 | ---------- | ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------- |
 | 配置类     | `data/config.json` | 家长密码、手动选择的模型                                                      | `lib/server/stateStore.ts`                  |
 | 统计类     | `data/stats.json`  | 调用统计、历史、字频、字库权重进度 `progress`                                 | 同上                                        |
-| 词库类     | `data/banks.json`  | 字库定义（内置默认值 + 自定义）与启停                                         | `lib/banks.ts` + `lib/seed/builtinBanks.ts` |
+| 词库类     | `data/banks.json`  | 字库定义（内置默认值 + 自定义）、整库启停、逐字禁用 `disabledChars`           | `lib/banks.ts` + `lib/seed/builtinBanks.ts` |
 | 浏览器镜像 | localStorage       | 三个分区的副本（`hanzi_parent_config` / `hanzi_study_stats` / `hanzi_banks`） | `lib/storage.ts`                            |
 | 浏览器本地 | localStorage       | 打印配置（`hanzi_print_config`，设备偏好，不同步）                            | `hooks/usePrintConfig.ts`                   |
 
@@ -293,6 +300,8 @@ learn-hanzi/                          # Git 仓库根
 
 **升级补种（E3）**：内置字库内容变更（`seedRevision` 或内容指纹 `seedFingerprint` 变化）时，
 只更新 `origin: "builtin"` 且未被家长改过的条目；自定义字库永不被覆盖。
+家长给内置字库补充过汉字（`customized: true`）的条目不参与补种——新增内容不会被冲掉；仅禁用过
+汉字（`disabledChars`）的条目仍可升级，禁用状态会保留。
 
 同步链路：
 

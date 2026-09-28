@@ -74,6 +74,14 @@ export interface BankRecord extends WordBank {
   enabled: boolean;
   /** 内置条目被家长改过 → 升级补种不再覆盖 */
   customized?: boolean;
+  /**
+   * 被家长单独禁用的汉字（内容维护页维护）
+   *
+   * 只在此处记录"禁用"，chars 保持字库的完整定义：
+   * - 生效字一律用 lib/banks.ts 的 getActiveChars() 计算（chars 减去 disabledChars）
+   * - 内置字与家长新增字都只能"禁用"，禁用不改变字库内容，因此不置 customized
+   */
+  disabledChars?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

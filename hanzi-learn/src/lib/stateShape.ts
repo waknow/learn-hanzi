@@ -83,6 +83,9 @@ export function hasUserData(state: PartialState | null | undefined): boolean {
   if (items.some((item) => item?.origin === "custom")) return true;
   // 家长关掉过某个字库也算用户数据（默认值全为启用）
   if (items.some((item) => item?.enabled === false)) return true;
+  // 在内容维护页禁用过汉字、或给内置字库补过字也算用户数据（默认值两者都没有）
+  if (items.some((item) => (item?.disabledChars?.length ?? 0) > 0)) return true;
+  if (items.some((item) => item?.origin === "builtin" && item?.customized === true)) return true;
 
   return false;
 }
