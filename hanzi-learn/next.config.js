@@ -34,6 +34,11 @@ const nextConfig = {
     APP_VERSION,
     GIT_COMMIT,
   },
+  // 服务启动钩子（src/instrumentation.ts）：E1 数据初始化 / E2 迁移。
+  // Next 14 需要显式开启该实验开关；Next 15 起默认开启。
+  experimental: {
+    instrumentationHook: true,
+  },
 };
 
 module.exports = nextConfig;

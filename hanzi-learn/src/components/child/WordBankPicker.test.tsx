@@ -4,7 +4,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import WordBankPicker from "./WordBankPicker";
-import { saveConfig } from "@/lib/storage";
+import { loadBanks, saveBanks } from "@/lib/storage";
+
+/** 只启用给定 id 的字库（其余停用） */
+function enableOnly(ids: string[]) {
+  const banks = loadBanks();
+  saveBanks({ items: banks.items.map((b) => ({ ...b, enabled: ids.includes(b.id) })) });
+}
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -33,8 +39,8 @@ describe("WordBankPicker", () => {
     expect(pushMock).toHaveBeenCalledWith("/child/sentence?bank=level1");
   });
 
-  it("enabledBanks 只显示启用的字库", async () => {
-    saveConfig({ password: "1234", enabledBanks: ["level1"], customBanks: [] });
+  it("只显示 enabled=true 的字库", async () => {
+    enableOnly(["level1"]);
     render(<WordBankPicker />);
     expect(await screen.findByText("一级")).toBeInTheDocument();
     expect(screen.queryByText("二级")).not.toBeInTheDocument();
@@ -50,8 +56,8 @@ describe("WordBankPicker", () => {
     expect(pushMock).not.toHaveBeenCalledWith("/child/sentence?bank=level1");
   });
 
-  it("没有可用字库时显示空态提示", async () => {
-    saveConfig({ password: "1234", enabledBanks: ["nope"], customBanks: [] });
+  it("没有启用的字库时显示空态提示", async () => {
+    enableOnly([]);
     render(<WordBankPicker />);
     expect(await screen.findByText(/请让家长先开启字库/)).toBeInTheDocument();
   });

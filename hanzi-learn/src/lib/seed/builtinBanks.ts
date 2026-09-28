@@ -1,6 +1,24 @@
-import { WordBank } from "./types";
+/**
+ * 内置字库 = **初始化默认值**（不是运行时数据源）
+ *
+ * v2 起所有读取都以 data/banks.json 为准：本文件只在
+ * 「初始化（文件不存在）」与「升级补种（seedRevision/fingerprint 变化）」时被读取一次。
+ * 业务代码（UI / hook / 页面）禁止 import 本模块，见 .eslintrc.json 的 no-restricted-imports。
+ *
+ * 改动本文件的内容后：
+ *   1. 建议同时把 BUILTIN_SEED_REVISION +1（语义清晰，便于排查日志）
+ *   2. 即使忘记 +1，seedFingerprint 内容指纹变化也会触发升级补种（保险）
+ *   3. 若新增/删除汉字，请同步 src/lib/pinyin.ts 与 src/lib/frequency.ts，
+ *      并由 pinyin.test.ts 的完整性测试兜底
+ */
 
-export const BUILT_IN_BANKS: WordBank[] = [
+import type { WordBank } from "../types";
+
+/** 初始化默认值版本号：内置字库内容/规则变更时 +1（人工维护） */
+export const BUILTIN_SEED_REVISION = 1;
+
+/** 内置字库初始化默认值（只读语义；读取方应拷贝后再使用） */
+export const BUILTIN_BANK_SEED: WordBank[] = [
   {
     id: "level1",
     name: "一级",
@@ -94,21 +112,3 @@ export const BUILT_IN_BANKS: WordBank[] = [
     ],
   },
 ];
-
-export function findBankById(id: string): WordBank | undefined {
-  return BUILT_IN_BANKS.find((b) => b.id === id);
-}
-
-export function getBuiltInBankIds(): string[] {
-  return BUILT_IN_BANKS.map((b) => b.id);
-}
-
-export function getMergedBankChars(): string[] {
-  const merged = new Set<string>();
-  for (const bank of BUILT_IN_BANKS) {
-    for (const c of bank.chars) {
-      merged.add(c);
-    }
-  }
-  return [...merged];
-}

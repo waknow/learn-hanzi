@@ -1,17 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { BUILT_IN_BANKS } from "@/lib/wordBanks";
-import { loadConfig, saveConfig, saveWeightData, saveStats } from "@/lib/storage";
+import {
+  loadConfig,
+  loadWeightData,
+  replaceWeightData,
+  saveBanks,
+  saveConfig,
+  saveStats,
+} from "@/lib/storage";
+import { useBanks } from "@/hooks/useBanks";
 import ModelSelector from "@/components/parent/ModelSelector";
-import type { ParentConfig, WordBank } from "@/lib/types";
+import type { BankRecord, ConfigSection, WordBank } from "@/lib/types";
 
 /** 设置管理页 */
 export default function SettingsPage() {
   const router = useRouter();
-  const [config, setConfig] = useState<ParentConfig | null>(null);
+  const [config, setConfig] = useState<ConfigSection | null>(null);
+  // 字库来自数据源（banks.json 的镜像）；draftBanks 是本地草稿，改动后立即写回并驱动重渲染
+  const { items: bankItems, ready: banksReady } = useBanks();
+  const [draftBanks, setDraftBanks] = useState<BankRecord[] | null>(null);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [editBank, setEditBank] = useState<WordBank | null>(null);
   const [editName, setEditName] = useState("");
@@ -26,39 +36,36 @@ export default function SettingsPage() {
     setConfig(loadConfig());
   }, []);
 
-  // 全部字库 id（内置 + 自定义）：用于「全部启用」（enabledBanks 为空数组）的展开
-  const allBankIds = useMemo(
-    () => [...BUILT_IN_BANKS.map((b) => b.id), ...(config?.customBanks ?? []).map((b) => b.id)],
-    [config?.customBanks],
-  );
+  const banks = draftBanks ?? bankItems;
+  const enabledBanks = banks.filter((b) => b.enabled);
+  const disabledBanks = banks.filter((b) => !b.enabled);
+  const customBanks = banks.filter((b) => b.origin === "custom");
 
-  if (!config) return null;
+  if (!config || !banksReady) return null;
 
   /** 写入新配置（不可变更新，state 即唯一真相，无需回读 localStorage） */
-  const commit = (next: ParentConfig) => {
+  const commit = (next: ConfigSection) => {
     setConfig(next);
     saveConfig(next);
   };
 
-  // 切换启用/禁用
-  // ⚠️ enabledBanks 为空数组 = 全部启用（约定）。此时点击某张卡片的语义是
-  // 「只禁用这一个」：必须先把空数组展开成全部 id 再移除，否则会把其他字库全部关掉。
+  /** 写入字库分区（不可变更新） */
+  const commitBanks = (next: BankRecord[]) => {
+    setDraftBanks(next);
+    saveBanks({ items: next });
+  };
+
+  // 切换启用/禁用：v2 起每个字库自带 enabled 字段，
+  // 不再有 v1 那套"enabledBanks 为空数组 = 全部启用"的约定与展开技巧
   const toggleBank = (id: string) => {
-    const current = config.enabledBanks;
-    const next =
-      current.length === 0
-        ? allBankIds.filter((bankId) => bankId !== id)
-        : current.includes(id)
-          ? current.filter((bankId) => bankId !== id)
-          : [...current, id];
-    // 又变回「全部启用」时归一化为空数组，避免 id 列表与约定漂移
-    commit({ ...config, enabledBanks: next.length === allBankIds.length ? [] : next });
+    commitBanks(banks.map((bank) => (bank.id === id ? { ...bank, enabled: !bank.enabled } : bank)));
   };
 
   // 重置权重
   const resetWeights = () => {
     if (!confirm("确定要重置所有字的权重吗？")) return;
-    saveWeightData({});
+    // 用 replaceWeightData：显式要求服务端整体覆盖，否则重置会被"按 bankId 合并"吃掉
+    replaceWeightData({});
     alert("权重已重置");
   };
 
@@ -73,6 +80,7 @@ export default function SettingsPage() {
       history: {},
       sentenceHistory: [],
       charUsage: {},
+      progress: {},
     });
     alert("学习记录已清除");
   };
@@ -107,21 +115,25 @@ export default function SettingsPage() {
 
     if (editBank) {
       // 编辑（不可变更新）
-      commit({
-        ...config,
-        customBanks: config.customBanks.map((b) =>
+      commitBanks(
+        banks.map((b) =>
           b.id === editBank.id ? { ...b, name: editName, emoji: editEmoji, chars } : b,
         ),
-      });
+      );
     } else {
       // 新增
-      const newBank: WordBank = {
+      const now = new Date().toISOString();
+      const newBank: BankRecord = {
         id: `custom_${Date.now()}`,
         name: editName,
         emoji: editEmoji,
         chars,
+        origin: "custom",
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
       };
-      commit({ ...config, customBanks: [...config.customBanks, newBank] });
+      commitBanks([...banks, newBank]);
     }
 
     setShowCustomEditor(false);
@@ -130,12 +142,15 @@ export default function SettingsPage() {
   // 删除自定义字库
   const deleteCustom = (id: string) => {
     if (!confirm("确定要删除这个自定义字库吗？")) return;
-    commit({
-      ...config,
-      customBanks: config.customBanks.filter((b) => b.id !== id),
-      // 同步清理启用列表，避免残留已删除的 id
-      enabledBanks: config.enabledBanks.filter((bankId) => bankId !== id),
-    });
+    commitBanks(banks.filter((b) => b.id !== id));
+
+    // 同步清理该字库的权重进度，避免留下孤儿数据
+    const progress = loadWeightData();
+    if (progress[id]) {
+      const next = { ...progress };
+      delete next[id];
+      replaceWeightData(next);
+    }
   };
 
   // 修改密码
@@ -160,8 +175,6 @@ export default function SettingsPage() {
     alert("密码已修改");
   };
 
-  const allEnabled = config.enabledBanks.length === 0;
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-candy-purple/10 to-candy-sky/10 p-6 pb-32">
       {/* 顶部导航 */}
@@ -184,37 +197,23 @@ export default function SettingsPage() {
 
       {/* 已启用 */}
       <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mb-6">
-        <h2 className="text-gray-500 font-cartoon mb-3">
-          {allEnabled ? "全部已启用" : "已启用字库"}
-        </h2>
+        <h2 className="text-gray-500 font-cartoon mb-3">已启用字库</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {BUILT_IN_BANKS.filter((b) => allEnabled || config.enabledBanks.includes(b.id)).map(
-            (bank) => (
-              <BankToggleCard
-                key={bank.id}
-                bank={bank}
-                enabled={true}
-                onToggle={() => toggleBank(bank.id)}
-              />
-            ),
-          )}
-          {config.customBanks
-            .filter((b) => allEnabled || config.enabledBanks.includes(b.id))
-            .map((bank) => (
-              <BankToggleCard
-                key={bank.id}
-                bank={bank}
-                enabled={true}
-                onToggle={() => toggleBank(bank.id)}
-                onEdit={() => openEditor(bank)}
-                onDelete={() => deleteCustom(bank.id)}
-              />
-            ))}
+          {enabledBanks.map((bank) => (
+            <BankToggleCard
+              key={bank.id}
+              bank={bank}
+              enabled={true}
+              onToggle={() => toggleBank(bank.id)}
+              onEdit={bank.origin === "custom" ? () => openEditor(bank) : undefined}
+              onDelete={bank.origin === "custom" ? () => deleteCustom(bank.id) : undefined}
+            />
+          ))}
         </div>
       </motion.div>
 
       {/* 已禁用 */}
-      {!allEnabled && (
+      {disabledBanks.length > 0 && (
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -223,12 +222,14 @@ export default function SettingsPage() {
         >
           <h2 className="text-gray-500 font-cartoon mb-3">已禁用字库</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {BUILT_IN_BANKS.filter((b) => !config.enabledBanks.includes(b.id)).map((bank) => (
+            {disabledBanks.map((bank) => (
               <BankToggleCard
                 key={bank.id}
                 bank={bank}
                 enabled={false}
                 onToggle={() => toggleBank(bank.id)}
+                onEdit={bank.origin === "custom" ? () => openEditor(bank) : undefined}
+                onDelete={bank.origin === "custom" ? () => deleteCustom(bank.id) : undefined}
               />
             ))}
           </div>
@@ -251,17 +252,17 @@ export default function SettingsPage() {
             + 新增
           </button>
         </div>
-        {config.customBanks.length === 0 ? (
+        {customBanks.length === 0 ? (
           <p className="text-gray-300 text-sm text-center py-6">
             还没有自定义字库，点击「+ 新增」创建
           </p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {config.customBanks.map((bank) => (
+            {customBanks.map((bank) => (
               <BankToggleCard
                 key={bank.id}
                 bank={bank}
-                enabled={allEnabled || config.enabledBanks.includes(bank.id)}
+                enabled={bank.enabled}
                 onToggle={() => toggleBank(bank.id)}
                 onEdit={() => openEditor(bank)}
                 onDelete={() => deleteCustom(bank.id)}
@@ -431,7 +432,7 @@ function BankToggleCard({
   onEdit,
   onDelete,
 }: {
-  bank: WordBank;
+  bank: BankRecord;
   enabled: boolean;
   onToggle: () => void;
   onEdit?: () => void;

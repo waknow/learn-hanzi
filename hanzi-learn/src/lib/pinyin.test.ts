@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { PINYIN_MAP, getPinyin, getPinyinLine } from "./pinyin";
-import { BUILT_IN_BANKS } from "./wordBanks";
+import { BUILTIN_BANK_SEED } from "./seed/builtinBanks";
 
 describe("getPinyin", () => {
   it("返回汉字拼音", () => {
@@ -29,7 +29,7 @@ describe("getPinyinLine", () => {
 describe("PINYIN_MAP 完整性", () => {
   it("字卡打印涉及的所有字库字都有拼音", () => {
     const missing: string[] = [];
-    for (const bank of BUILT_IN_BANKS) {
+    for (const bank of BUILTIN_BANK_SEED) {
       for (const c of bank.chars) {
         if (!PINYIN_MAP[c]) missing.push(`${bank.id}:${c}`);
       }

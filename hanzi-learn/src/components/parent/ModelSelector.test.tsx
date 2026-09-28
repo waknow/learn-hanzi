@@ -93,7 +93,7 @@ describe("ModelSelector", () => {
 
   it("点击模型：PUT 保存并同步本地配置", async () => {
     const { calls } = stubFetch();
-    saveConfig({ password: "1234", enabledBanks: [], customBanks: [], model: "" });
+    saveConfig({ password: "1234", model: "" });
     render(<ModelSelector />);
     expect(await screen.findByText("DeepSeek V4 Pro")).toBeInTheDocument();
 
@@ -109,7 +109,7 @@ describe("ModelSelector", () => {
 
   it("点击「自动」：保存空串并清除手动选择", async () => {
     const { calls } = stubFetch();
-    saveConfig({ password: "1234", enabledBanks: [], customBanks: [], model: "deepseek-v4-pro" });
+    saveConfig({ password: "1234", model: "deepseek-v4-pro" });
     render(<ModelSelector />);
     expect(await screen.findByTestId("model-option-auto")).toBeInTheDocument();
 
@@ -196,7 +196,7 @@ describe("ModelSelector", () => {
       });
     });
     vi.stubGlobal("fetch", fetchMock as never);
-    saveConfig({ password: "1234", enabledBanks: [], customBanks: [], model: "" });
+    saveConfig({ password: "1234", model: "" });
     render(<ModelSelector />);
     expect(await screen.findByText("DeepSeek V4 Pro")).toBeInTheDocument();
 

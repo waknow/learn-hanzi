@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { BUILT_IN_BANKS } from "@/lib/wordBanks";
-import { loadConfig } from "@/lib/storage";
-import type { WordBank } from "@/lib/types";
+import { useBanks } from "@/hooks/useBanks";
 import { useSound } from "@/hooks/useSound";
 
 const CARD_COLORS = [
@@ -37,32 +34,8 @@ const EMOJI_BG = [
 export default function WordBankPicker() {
   const router = useRouter();
   const { init, play } = useSound();
-  const [banks, setBanks] = useState<WordBank[]>([]);
-
-  useEffect(() => {
-    const load = () => {
-      const config = loadConfig();
-      const enabledIds = config.enabledBanks;
-
-      // 合并内置字库和自定义字库
-      // 如果开启了全部（enabledBanks 为空数组），则显示全部
-      const allBanks =
-        enabledIds.length === 0
-          ? BUILT_IN_BANKS
-          : BUILT_IN_BANKS.filter((b) => enabledIds.includes(b.id));
-
-      const customs = (config.customBanks || []).filter((b) =>
-        enabledIds.length === 0 ? true : enabledIds.includes(b.id),
-      );
-
-      setBanks([...allBanks, ...customs]);
-    };
-
-    load();
-    // 服务端同步完成后刷新（跨设备修改字库后立即生效）
-    window.addEventListener("hanzi-state-synced", load);
-    return () => window.removeEventListener("hanzi-state-synced", load);
-  }, []);
+  // 字库来自数据（服务端 banks.json 的镜像）；enabled 由家长在设置页维护
+  const { enabledBanks, ready } = useBanks();
 
   const handleSelect = (bankId: string) => {
     init();
@@ -70,7 +43,15 @@ export default function WordBankPicker() {
     router.push(`/child/sentence?bank=${bankId}`);
   };
 
-  if (banks.length === 0) {
+  if (!ready) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-gray-300 px-8">
+        <p className="text-xl text-center">加载字库…</p>
+      </div>
+    );
+  }
+
+  if (enabledBanks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-gray-400 px-8">
         <div className="text-6xl mb-4">📚</div>
@@ -94,7 +75,7 @@ export default function WordBankPicker() {
       </h1>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-2xl mx-auto w-full">
-        {banks.map((bank, i) => (
+        {enabledBanks.map((bank, i) => (
           // 外层 div 承载定位：打印按钮是卡片按钮的兄弟节点。
           // ⚠️ 不能把 <button> 嵌在 <button> 里（非法 HTML，浏览器会重排 DOM 导致点击区域错乱）。
           <div key={bank.id} className="relative">
@@ -141,13 +122,13 @@ export default function WordBankPicker() {
           </div>
         ))}
 
-        {/* 综合 — 所有字库合并 */}
+        {/* 综合 — 所有已启用字库合并 */}
         <motion.button
           key="comprehensive"
           initial={{ y: 60, opacity: 0, scale: 0.8 }}
           animate={{ y: 0, opacity: 1, scale: 1 }}
           transition={{
-            delay: banks.length * 0.05,
+            delay: enabledBanks.length * 0.05,
             type: "spring",
             stiffness: 300,
             damping: 15,

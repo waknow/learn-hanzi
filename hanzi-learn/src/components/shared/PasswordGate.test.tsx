@@ -17,7 +17,7 @@ describe("PasswordGate", () => {
   beforeEach(() => localStorage.clear());
 
   it("已设置密码：输入正确密码后调用 onSuccess", () => {
-    saveConfig({ password: "8888", enabledBanks: [], customBanks: [] });
+    saveConfig({ password: "8888" });
     const onSuccess = vi.fn();
     render(<PasswordGate onSuccess={onSuccess} />);
     typeDigits(["8", "8", "8", "8"]);
@@ -25,7 +25,7 @@ describe("PasswordGate", () => {
   });
 
   it("已设置密码：输入错误密码不通过", () => {
-    saveConfig({ password: "8888", enabledBanks: [], customBanks: [] });
+    saveConfig({ password: "8888" });
     const onSuccess = vi.fn();
     render(<PasswordGate onSuccess={onSuccess} />);
     typeDigits(["1", "2", "3", "4"]);
@@ -34,7 +34,7 @@ describe("PasswordGate", () => {
 
   it("首次使用（无密码）：两次输入一致则保存并放行", () => {
     // 显式写入空密码触发首次设置分支（默认配置恒有 '1234'，不会走进该分支）
-    saveConfig({ password: "", enabledBanks: [], customBanks: [] });
+    saveConfig({ password: "" });
     const onSuccess = vi.fn();
     render(<PasswordGate onSuccess={onSuccess} />);
     typeDigits(["1", "2", "3", "4"]); // 设置新密码
@@ -44,7 +44,7 @@ describe("PasswordGate", () => {
   });
 
   it("首次使用：两次输入不一致则不放行", () => {
-    saveConfig({ password: "", enabledBanks: [], customBanks: [] });
+    saveConfig({ password: "" });
     const onSuccess = vi.fn();
     render(<PasswordGate onSuccess={onSuccess} />);
     typeDigits(["1", "2", "3", "4"]);

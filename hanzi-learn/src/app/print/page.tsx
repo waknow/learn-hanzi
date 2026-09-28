@@ -2,8 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { findBankById, getMergedBankChars } from "@/lib/wordBanks";
-import { loadConfig } from "@/lib/storage";
+import { useBanks } from "@/hooks/useBanks";
 import PrintCards from "@/components/child/PrintCards";
 
 function PrintPageInner() {
@@ -11,27 +10,37 @@ function PrintPageInner() {
   const searchParams = useSearchParams();
   const bankId = searchParams.get("bank") || "";
   const isComprehensive = bankId === "comprehensive";
+  const { ready, findBank, mergedChars } = useBanks();
+
   // useMemo：comprehensive 分支每次渲染会新建对象，不用 useMemo 会导致
   // useEffect([bank]) 每次渲染都执行（潜在无限重渲染）
   const bank = useMemo(() => {
+    if (!ready) return undefined;
     if (isComprehensive) {
-      return { id: "comprehensive", name: "综合", emoji: "📚", chars: getMergedBankChars() };
+      return { id: "comprehensive", name: "综合", emoji: "📚", chars: mergedChars() };
     }
-    const builtin = findBankById(bankId);
-    if (builtin) return builtin;
-    // 自定义字库：内置找不到时从配置补查（字库选择页对自定义字库也有打印入口）
-    return (loadConfig().customBanks || []).find((b) => b.id === bankId);
-  }, [isComprehensive, bankId]);
+    return findBank(bankId);
+  }, [ready, isComprehensive, bankId, findBank, mergedChars]);
 
   const [chars, setChars] = useState<string[]>([]);
 
   useEffect(() => {
+    // 就绪前无法判定"字库不存在"，此时跳转会误伤冷启动
+    if (!ready) return;
     if (!bank) {
       router.push("/child");
       return;
     }
     setChars([...bank.chars]);
-  }, [bank, router]);
+  }, [ready, bank, router]);
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-300 text-lg">
+        加载中…
+      </div>
+    );
+  }
 
   if (!bank) return null;
 

@@ -9,12 +9,37 @@
     "*.tar",
     "hanzi-learn-image-*.tar"
   ],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": [
+              "@/lib/seed/builtinBanks",
+              "./seed/builtinBanks",
+              "../seed/builtinBanks",
+              "**/seed/builtinBanks"
+            ],
+            "message": "内置字库是「初始化默认值」，只允许 lib/banks.ts 与测试引用；业务代码请用 useBanks()/loadBanks() 从数据源（banks.json）读取。"
+          }
+        ]
+      }
+    ]
+  },
   "overrides": [
     {
       "files": ["src/**/*.test.{ts,tsx}", "src/test/**/*.{ts,tsx}"],
       "extends": ["plugin:testing-library/react"],
       "rules": {
-        "testing-library/no-manual-cleanup": "off"
+        "testing-library/no-manual-cleanup": "off",
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/lib/banks.ts", "src/lib/seed/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
       }
     }
   ]

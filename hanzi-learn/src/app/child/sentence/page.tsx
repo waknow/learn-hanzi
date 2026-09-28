@@ -7,8 +7,7 @@ import IdleState from "@/components/child/IdleState";
 import LoadingState from "@/components/child/LoadingState";
 import ResultState from "@/components/child/ResultState";
 import BackButton from "@/components/child/BackButton";
-import { findBankById, getMergedBankChars } from "@/lib/wordBanks";
-import { loadConfig } from "@/lib/storage";
+import { useBanks } from "@/hooks/useBanks";
 import type { WordBank } from "@/lib/types";
 import { useWeightEngine } from "@/hooks/useWeightEngine";
 import { useSound } from "@/hooks/useSound";
@@ -48,12 +47,16 @@ function SentencePage() {
   const bankId = searchParams.get("bank") || "";
   const isComprehensive = bankId === "comprehensive";
 
-  // 字库解析：综合字库 / 内置字库优先；内置找不到时（自定义字库）在 effect 中补查
-  const [bank, setBank] = useState<WordBank | undefined>(() =>
-    isComprehensive
-      ? { id: "comprehensive", name: "综合", emoji: "📚", chars: getMergedBankChars() }
-      : findBankById(bankId),
-  );
+  // 字库解析：数据来自数据源（banks.json 的镜像，见 useBanks）；
+  // comprehensive 是虚拟字库，由已启用字库的并集算出，不落盘
+  const { ready: banksReady, findBank, mergedChars } = useBanks();
+  const bank = useMemo<WordBank | undefined>(() => {
+    if (!banksReady) return undefined;
+    if (isComprehensive) {
+      return { id: "comprehensive", name: "综合", emoji: "📚", chars: mergedChars() };
+    }
+    return findBank(bankId);
+  }, [banksReady, isComprehensive, bankId, findBank, mergedChars]);
 
   const { play } = useSound();
   const { recordCall } = useStats();
@@ -80,16 +83,12 @@ function SentencePage() {
   const chars = useMemo(() => bank?.chars || [], [bank]);
   const weightEngine = useWeightEngine(bankId, chars);
 
-  // 解析字库：内置找不到时查自定义字库；都没有则跳回选择页
+  // 就绪后仍找不到字库 → 跳回选择页。
+  // ⚠️ 就绪前 bank 必然为空，此时跳转会让冷启动/离线首屏闪回选择页
   useEffect(() => {
-    if (isComprehensive || bank) return;
-    const custom = (loadConfig().customBanks || []).find((b) => b.id === bankId);
-    if (custom) {
-      setBank(custom);
-    } else {
-      router.push("/child");
-    }
-  }, [isComprehensive, bank, bankId, router]);
+    if (!banksReady || isComprehensive || bank) return;
+    router.push("/child");
+  }, [banksReady, isComprehensive, bank, router]);
 
   // 客户端日志由模块级 clientLog 提供（默认静默，见文件顶部）
 
@@ -276,6 +275,14 @@ function SentencePage() {
     setState("loading");
     handleGenerate();
   }, [handleGenerate]);
+
+  if (!banksReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-300 text-lg">
+        加载中…
+      </div>
+    );
+  }
 
   if (!bank) return null;
 
