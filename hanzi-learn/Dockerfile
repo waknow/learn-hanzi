@@ -8,8 +8,11 @@ ARG GIT_COMMIT=unknown
 WORKDIR /app
 
 # 1. 先装依赖（利用 Docker 缓存）
+# ⚠️ 末尾的 test 是防线：npm 10 在网络异常时可能打印 error 却仍返回 0（"Exit handler never called!"），
+#    导致依赖没装成却在下一步 next build 才报 "next: not found"。这里显式校验可执行文件。
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund \
+ && test -x node_modules/.bin/next
 
 # 2. 复制源码并构建
 COPY . .

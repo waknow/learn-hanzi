@@ -87,7 +87,7 @@ npm run test         # 测试 + 覆盖率（全项目门槛，不达标失败）
 npm run test:lib     # 仅 src/lib 的测试与覆盖率
 npm run test:watch   # 测试监听模式
 npm run check        # 一键检查：typecheck + lint + test
-npm run docker:build # Docker 构建（含代理 + tar 导出）
+npm run docker:build # Docker 构建（可选代理 + tar 导出）
 npm run tag          # 版本打 tag（scripts/tag.sh）
 ```
 

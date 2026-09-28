@@ -52,12 +52,26 @@ fi
 VERSION="${VERSION#v}"
 
 OUTPUT="hanzi-learn-image-${VERSION}.tar"
-PROXY="${HTTP_PROXY:-http://host.docker.internal:7890}"
+
+# 代理默认关闭：容器内 npm ci 直连 registry 即可。
+# 需要走代理时先 export（如 export HTTP_PROXY=http://127.0.0.1:7890），脚本会把
+# 主机名 host.docker.internal 一并加到构建容器里（原生 Linux 的 docker build 默认不认这个主机名）。
+# ⚠️ 不要写死 host.docker.internal:7890：解析失败时 npm 10 会以 ECONNREFUSED 告警、
+#    甚至静默返回 0 而不装依赖，最终在 next build 阶段才以 "next: not found" 失败。
+PROXY="${HTTP_PROXY:-}"
+
+BUILD_ARGS=()
+if [ -n "$PROXY" ]; then
+  echo "→ 使用代理: $PROXY"
+  BUILD_ARGS+=(--build-arg "HTTP_PROXY=$PROXY" --build-arg "HTTPS_PROXY=$PROXY")
+  BUILD_ARGS+=(--add-host host.docker.internal:host-gateway)
+else
+  echo "→ 未设置 HTTP_PROXY，npm 直连 registry.npmjs.org"
+fi
 
 echo "=== 构建镜像 ($IMAGE_NAME:$VERSION, commit $GIT_COMMIT) ==="
 docker build \
-  --build-arg HTTP_PROXY="$PROXY" \
-  --build-arg HTTPS_PROXY="$PROXY" \
+  "${BUILD_ARGS[@]}" \
   --build-arg APP_VERSION="$VERSION" \
   --build-arg GIT_COMMIT="$GIT_COMMIT" \
   --platform linux/amd64 \

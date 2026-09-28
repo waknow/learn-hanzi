@@ -431,17 +431,29 @@ npm run tag                    # 等价于 bash scripts/tag.sh
 ```bash
 cd hanzi-learn
 
-# 方式一：使用构建脚本（自动带代理 + 导出 tar 包，版本取自最近 git tag）
+# 方式一：使用构建脚本（导出 tar 包，版本取自最近 git tag）
 bash scripts/build.sh
 
 # 指定镜像名 / 版本
 bash scripts/build.sh hanzi-learn 1.2.0
+
+# 需要走代理时（可选；不设置则直连 registry.npmjs.org）
+export HTTP_PROXY=http://127.0.0.1:7890
+bash scripts/build.sh
 
 # 方式二：通过 npm script
 npm run docker:build
 
 # 方式三：手动构建（版本信息缺省为 0.0.0-dev）
 docker build \
+  --build-arg APP_VERSION=1.0.0 \
+  --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
+  --platform linux/amd64 \
+  -t hanzi-learn:1.0.0 .
+
+# 手动构建 + 代理（代理在本机时；host.docker.internal 需要 --add-host 才能在原生 Linux 解析）
+docker build \
+  --add-host host.docker.internal:host-gateway \
   --build-arg HTTP_PROXY=http://host.docker.internal:7890 \
   --build-arg HTTPS_PROXY=http://host.docker.internal:7890 \
   --build-arg APP_VERSION=1.0.0 \
@@ -450,7 +462,11 @@ docker build \
   -t hanzi-learn:1.0.0 .
 ```
 
-构建完成后会在 `hanzi-learn/` 目录生成带版本号的 tar 包，如 `hanzi-learn-image-1.2.0.tar`。
+> 代理为**可选项**：脚本默认直连 registry。曾经写死的 `host.docker.internal:7890` 在原生 Linux 的
+> `docker build` 里解析不到，会导致 `npm ci` 失败（且 npm 10 可能打印 error 却返回 0，直到
+> `next build` 才报 `next: not found`），现已改为按需启用。
+
+构建完成后会在 `hanzi-learn/` 目录生成带版本号的 tar 包，如 `hanzi-learn-image-1.3.1.tar`。
 `.dockerignore` 已排除 `node_modules`、`.next`、`data`、`env`、`coverage` 与导出的 tar，避免构建上下文爆涨。
 
 > 已知项：runner 阶段直接复制 builder 的全部 `node_modules`（含 vitest/eslint 等 devDeps），

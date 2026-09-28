@@ -3,6 +3,26 @@
 > 来源：各轮代码审查（2026-08-01 测试与 Lint 基础设施、2026-08-13 代码审查、2026-09-09 优化轮、
 > 2026-09-28 文档梳理）。未修复项全部非阻塞，按优先级分组，供后续排期处理。
 
+## 已修复（2026-09-28，v1.3.1 Docker 构建修复）
+
+发布 v1.3.0 镜像时构建失败，定位到构建脚本的代理默认值。
+
+| 项                       | 修复内容                                                                                                                                                                                                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 构建脚本写死代理         | `scripts/build.sh` 原先默认 `PROXY=http://host.docker.internal:7890` 并强制注入 `HTTP(S)_PROXY`。原生 Linux 的 `docker build` 不解析 `host.docker.internal`（Docker Desktop 才有），容器内 `npm ci` 全部 `ECONNREFUSED`；改为**默认直连**，仅在调用方 `export HTTP_PROXY` 时启用，并自动加 `--add-host host.docker.internal:host-gateway` |
+| npm 失败却返回 0（静默） | npm 10.8.2 在网络报错时打印 `Exit handler never called!` 却以 **0** 退出，`RUN npm ci` 因此"成功"，直到 `next build` 才报 `next: not found`。Dockerfile 改为 `npm ci --no-audit --no-fund && test -x node_modules/.bin/next`，让依赖缺失立即失败                                                                       |
+
+复现与验证（可复现的事实）：
+
+| 场景                                              | 结果                                              |
+| ------------------------------------------------- | ------------------------------------------------- |
+| `node:20-alpine` + `HTTP(S)_PROXY=host.docker.internal:7890` | npm ci 报 `ECONNREFUSED`，node_modules 未装成    |
+| `node:20-alpine` 直连 registry                  | `added 550 packages in 44s`，无 ECONNREFUSED    |
+| 修复后 `bash scripts/build.sh`                  | 构建成功并导出 `hanzi-learn-image-1.3.1.tar`    |
+
+> 运维提示：需要代理时在构建前 `export HTTP_PROXY=http://127.0.0.1:7890`（本机代理用 127.0.0.1 也可以，
+> 脚本不依赖 `host.docker.internal`）。
+
 ## 已修复（2026-09-28，字库内容维护轮）
 
 家长此前只能整库启用/禁用，无法维护字库里的具体汉字。新增字库内容维护页（`/parent/banks?bank=<id>`，
