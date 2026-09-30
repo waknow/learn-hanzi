@@ -71,7 +71,7 @@ fi
 
 echo "=== 构建镜像 ($IMAGE_NAME:$VERSION, commit $GIT_COMMIT) ==="
 docker build \
-  "${BUILD_ARGS[@]}" \
+  "${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}" \
   --build-arg APP_VERSION="$VERSION" \
   --build-arg GIT_COMMIT="$GIT_COMMIT" \
   --platform linux/amd64 \
